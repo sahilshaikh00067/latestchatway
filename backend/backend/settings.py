@@ -38,7 +38,10 @@ MIDDLEWARE = [
 # =========================
 # 🔥 CORS SETTINGS
 # =========================
-CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOWED_ORIGINS = [
+    "https://YOUR-VERCEL-APP.vercel.app",
+]
+
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_METHODS = [
     'DELETE',
