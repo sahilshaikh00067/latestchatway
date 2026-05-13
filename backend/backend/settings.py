@@ -39,7 +39,7 @@ MIDDLEWARE = [
 # 🔥 CORS SETTINGS
 # =========================
 CORS_ALLOWED_ORIGINS = [
-    "https://YOUR-VERCEL-APP.vercel.app",
+    "https://chatway.vercel.app",
 ]
 
 CORS_ALLOW_CREDENTIALS = True
