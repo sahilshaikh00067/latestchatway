@@ -52,8 +52,8 @@ const Dashboard = () => {
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     let start, end;
 
-    if (selectedFilter === "Today") {
-      start = today.getTime(); end = now.getTime();
+  if (selectedFilter === "Today") {
+    start = now.getTime() - (24 * 60 * 60 * 1000); end = now.getTime();
     } else if (selectedFilter === "Yesterday") {
       const y = new Date(today); y.setDate(y.getDate() - 1);
       start = y.getTime(); end = today.getTime() - 1;

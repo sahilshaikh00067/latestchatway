@@ -11,7 +11,9 @@ USERNAME = "APIDEMO"
 
 # 🔥 Jitne tokens utne numbers se parallel send hoga
 TOKENS = [
-    "c0Z6bG9mYTlTQmFMeEVXYlgyRzdzZz09",
+    "SWlqZWN4NmpGVGN5a01NMUhSZzdlQT09",
+    "bEJURktLb0Zzdm9WYXMxZGlkQjVYdz09",
+    ""
 ]
 
 TOKEN_COUNT = len(TOKENS)  # Automatically count hoga
