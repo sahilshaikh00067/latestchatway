@@ -67,25 +67,31 @@ const WappReports = () => {
   // ─────────────────────────────────────────
   useEffect(() => {
     const now   = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const IST_OFFSET = 5.5 * 60 * 60 * 1000;
+    const todayIST = new Date(Math.floor((now.getTime() + IST_OFFSET) / 86400000) * 86400000 - IST_OFFSET);
+
     let start, end;
 
     if (selectedFilter === "Today") {
-     start = now.getTime() - (24 * 60 * 60 * 1000); end = now.getTime();
+      start = todayIST.getTime();
+      end   = now.getTime();
     } else if (selectedFilter === "Yesterday") {
-      const y = new Date(today); y.setDate(y.getDate() - 1);
-      start = y.getTime(); end = today.getTime() - 1;
+      start = todayIST.getTime() - 86400000;
+      end   = todayIST.getTime() - 1;
     } else if (selectedFilter === "Last 7 Days") {
-      const d = new Date(today); d.setDate(d.getDate() - 7);
-      start = d.getTime(); end = now.getTime();
+      start = todayIST.getTime() - 7 * 86400000;
+      end   = now.getTime();
     } else if (selectedFilter === "Last 30 Days") {
-      const d = new Date(today); d.setDate(d.getDate() - 30);
-      start = d.getTime(); end = now.getTime();
+      start = todayIST.getTime() - 30 * 86400000;
+      end   = now.getTime();
     } else if (selectedFilter === "This Month") {
-      start = new Date(now.getFullYear(), now.getMonth(), 1).getTime(); end = now.getTime();
+      const istNow = new Date(now.getTime() + IST_OFFSET);
+      start = new Date(Date.UTC(istNow.getUTCFullYear(), istNow.getUTCMonth(), 1) - IST_OFFSET).getTime();
+      end   = now.getTime();
     } else if (selectedFilter === "Last Month") {
-      start = new Date(now.getFullYear(), now.getMonth() - 1, 1).getTime();
-      end   = new Date(now.getFullYear(), now.getMonth(), 1).getTime() - 1;
+      const istNow = new Date(now.getTime() + IST_OFFSET);
+      start = new Date(Date.UTC(istNow.getUTCFullYear(), istNow.getUTCMonth() - 1, 1) - IST_OFFSET).getTime();
+      end   = new Date(Date.UTC(istNow.getUTCFullYear(), istNow.getUTCMonth(), 1) - IST_OFFSET).getTime() - 1;
     } else if (selectedFilter === "Custom Range") {
       if (!customStart || !customEnd) { setEntries(allEntries); return; }
       start = new Date(customStart).getTime();
@@ -247,7 +253,7 @@ const handleDownload = (data) => {
                               </span>
                             ) : (
                               <span className="bg-[#4dbd74] text-white px-2 py-1 text-xs rounded-full">
-                                ✅ COMPLETED
+                                 COMPLETED
                               </span>
                             )}
                           </td>

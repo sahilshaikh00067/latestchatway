@@ -49,20 +49,24 @@ const Dashboard = () => {
   // ─────────────────────────────────────────
   useEffect(() => {
     const now   = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    // IST offset = +5:30 = 330 minutes
+    const IST_OFFSET = 5.5 * 60 * 60 * 1000;
+    const todayIST = new Date(Math.floor((now.getTime() + IST_OFFSET) / 86400000) * 86400000 - IST_OFFSET);
+
     let start, end;
 
-  if (selectedFilter === "Today") {
-    start = now.getTime() - (24 * 60 * 60 * 1000); end = now.getTime();
+    if (selectedFilter === "Today") {
+      start = todayIST.getTime();
+      end   = now.getTime();
     } else if (selectedFilter === "Yesterday") {
-      const y = new Date(today); y.setDate(y.getDate() - 1);
-      start = y.getTime(); end = today.getTime() - 1;
+      start = todayIST.getTime() - 86400000;
+      end   = todayIST.getTime() - 1;
     } else if (selectedFilter === "Last 7 Days") {
-      const d = new Date(today); d.setDate(d.getDate() - 7);
-      start = d.getTime(); end = now.getTime();
+      start = todayIST.getTime() - 7 * 86400000;
+      end   = now.getTime();
     } else if (selectedFilter === "Last 30 Days") {
-      const d = new Date(today); d.setDate(d.getDate() - 30);
-      start = d.getTime(); end = now.getTime();
+      start = todayIST.getTime() - 30 * 86400000;
+      end   = now.getTime();
     } else if (selectedFilter === "Custom Range") {
       if (!fromDate || !toDate) return;
       start = new Date(fromDate).getTime();
