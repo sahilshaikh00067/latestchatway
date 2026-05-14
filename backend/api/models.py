@@ -46,6 +46,9 @@ class CreditLog(models.Model):
 
     def __str__(self):
         return f"{self.action} {self.amount} | {self.from_user} → {self.to_user}"
+    
+
+    
 class Campaign(models.Model):
     STATUS_CHOICES = (
         ("pending",   "Pending"),
@@ -53,19 +56,23 @@ class Campaign(models.Model):
     )
 
     user          = models.ForeignKey(User, on_delete=models.CASCADE)
-    campaign_name = models.CharField(max_length=255, blank=True, default="")  # ← NEW
+    campaign_name = models.CharField(max_length=255, blank=True, default="")
     message       = models.TextField()
     total         = models.IntegerField(default=0)
     success       = models.IntegerField(default=0)
     failed        = models.IntegerField(default=0)
-    status        = models.CharField(                                          # ← NEW
+    nonwa         = models.IntegerField(default=0)                    # ← ADD
+    rejected      = models.IntegerField(default=0)                    # ← ADD
+    status        = models.CharField(
         max_length=20,
         choices=STATUS_CHOICES,
         default="completed"
     )
-    created_at    = models.DateTimeField(auto_now_add=True)
     results       = models.JSONField(default=list, blank=True)
-    number_list = models.JSONField(default=list, blank=True)
+    number_list   = models.JSONField(default=list, blank=True)
+    file_urls     = models.JSONField(default=list, blank=True)        # ← ADD
+    complete_at   = models.DateTimeField(null=True, blank=True)       # ← ADD
+    created_at    = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return f"{self.user.username} - {self.campaign_name} - {self.status}"
