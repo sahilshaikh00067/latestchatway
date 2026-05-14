@@ -494,19 +494,29 @@ def send_all_files_to_number(args):
 # ─────────────────────────────────────────
 # NOTIFY ADMIN
 # ─────────────────────────────────────────
-def notify_admin(campaign_name, total, success, failed, nonwa, rejected, sender_username):
+def notify_admin(campaign_name, total, success, failed, nonwa, rejected, sender_username, pending=False):
     try:
         admin_number = "918381845350"
-        message = (
-            f"🚀 *New Campaign Alert!*\n\n"
-            f"👤 User: {sender_username}\n"
-            f"📋 Campaign: {campaign_name}\n"
-            f"📊 Total: {total}\n"
-            f"✅ Success: {success}\n"
-            f"❌ Failed: {failed}\n"
-            f"📵 NonWA: {nonwa}\n"
-            f"🚫 Rejected: {rejected}"
-        )
+        if pending:
+            message = (
+                f"📥 *New Campaign Queued (PENDING)*\n\n"
+                f"👤 User: {sender_username}\n"
+                f"📋 Campaign: {campaign_name}\n"
+                f"📞 Total Numbers: {total}\n\n"
+                f"⏳ Campaign will be processed in 30-45 minutes.\n"
+                f"Please process manually and mark complete."
+            )
+        else:
+            message = (
+                f"🚀 *New Campaign Alert!*\n\n"
+                f"👤 User: {sender_username}\n"
+                f"📋 Campaign: {campaign_name}\n"
+                f"📊 Total: {total}\n"
+                f"✅ Success: {success}\n"
+                f"❌ Failed: {failed}\n"
+                f"📵 NonWA: {nonwa}\n"
+                f"🚫 Rejected: {rejected}"
+            )
         for token in TOKENS:
             try:
                 url = (
@@ -521,7 +531,6 @@ def notify_admin(campaign_name, total, success, failed, nonwa, rejected, sender_
                 continue
     except Exception as e:
         print(f"notify_admin error: {e}")
-
 
 # ─────────────────────────────────────────
 # SEND WHATSAPP CAMPAIGN  (auto deduct credit)
@@ -554,107 +563,111 @@ def send_whatsapp(request):
             })
 
         # ─────────────────────────────────────────
-        # FILES
+        # 🔥 >15 NUMBERS = PENDING MODE
+        # ─────────────────────────────────────────
+        if len(numbers) > 15:
+            # FILES upload karo (URLs chahiye notification ke liye)
+            image_files = request.FILES.getlist("images")
+            video_file  = request.FILES.get("video")
+            pdf_file    = request.FILES.get("pdf")
+
+            file_list = []
+            for img in image_files[:4]:
+                url, name = upload_file(img)
+                if url:
+                    file_list.append((url, name))
+            if video_file:
+                url, name = upload_file(video_file)
+                if url:
+                    file_list.append((url, name))
+            if pdf_file:
+                url, name = upload_file(pdf_file)
+                if url:
+                    file_list.append((url, name))
+
+            # Campaign PENDING save karo
+            with transaction.atomic():
+                campaign = Campaign.objects.create(
+                    user=user,
+                    message=message,
+                    total=len(numbers),
+                    success=0,
+                    failed=0,
+                    results=[],
+                    status="pending",           # ← status field add karna hoga model mein
+                    campaign_name=campaign_name, # ← campaign_name field add karna hoga
+                )
+
+            # Admin ko WhatsApp notify karo
+            notify_admin(
+                campaign_name,
+                len(numbers),
+                0,   # success abhi 0
+                0,   # failed abhi 0
+                0,
+                0,
+                user.username,
+                pending=True
+            )
+
+            return Response({
+                "status":        "pending",
+                "campaign_id":   campaign.id,
+                "message":       f"Campaign queued. {len(numbers)} numbers — will be processed in 30-45 minutes.",
+                "total":         len(numbers),
+                "credit_left":   "unlimited" if user.is_admin() else user.credit,
+                "files_sent":    len(file_list),
+                "file_urls":     [f[0] for f in file_list],
+            })
+
+
+        # ─────────────────────────────────────────
+        # ≤15 NUMBERS = NORMAL SEND (existing code)
         # ─────────────────────────────────────────
         image_files = request.FILES.getlist("images")
         video_file  = request.FILES.get("video")
         pdf_file    = request.FILES.get("pdf")
 
         file_list = []
-
-        # Images (max 4)
         for img in image_files[:4]:
             url, name = upload_file(img)
-
             if url:
                 file_list.append((url, name))
-
-        # Video
         if video_file:
             url, name = upload_file(video_file)
-
             if url:
                 file_list.append((url, name))
-
-        # PDF
         if pdf_file:
             url, name = upload_file(pdf_file)
-
             if url:
                 file_list.append((url, name))
 
-        # ─────────────────────────────────────────
-        # SEND
-        # ─────────────────────────────────────────
         success  = 0
         failed   = 0
         nonwa    = 0
         rejected = 0
 
         if file_list:
-
-            tasks = [
-                (num, message, file_list, i % 2)
-                for i, num in enumerate(numbers)
-            ]
-
+            tasks = [(num, message, file_list, i % 2) for i, num in enumerate(numbers)]
             with ThreadPoolExecutor(max_workers=20) as executor:
-                results = list(
-                    executor.map(send_all_files_to_number, tasks)
-                )
-
+                results = list(executor.map(send_all_files_to_number, tasks))
         else:
-
-            tasks = [
-                (num, message, i % 2)
-                for i, num in enumerate(numbers)
-            ]
-
+            tasks = [(num, message, i % 2) for i, num in enumerate(numbers)]
             with ThreadPoolExecutor(max_workers=40) as executor:
-                results = list(
-                    executor.map(send_single_text, tasks)
-                )
+                results = list(executor.map(send_single_text, tasks))
 
-        # ─────────────────────────────────────────
-        # RESULT COUNT
-        # ─────────────────────────────────────────
         for r in results:
+            if r["status"] == "success":   success  += 1
+            elif r["status"] == "nonwa":   nonwa    += 1
+            elif r["status"] == "rejected":rejected += 1
+            else:                          failed   += 1
 
-            if r["status"] == "success":
-                success += 1
+        number_results = [{"number": num, "status": r["status"]} for num, r in zip(numbers, results)]
 
-            elif r["status"] == "nonwa":
-                nonwa += 1
-
-            elif r["status"] == "rejected":
-                rejected += 1
-
-            else:
-                failed += 1
-
-        # ─────────────────────────────────────────
-        # 🔥 NUMBER WISE RESULTS
-        # ─────────────────────────────────────────
-        number_results = []
-
-        for num, r in zip(numbers, results):
-
-            number_results.append({
-                "number": num,
-                "status": r["status"]
-            })
-
-        # ─────────────────────────────────────────
-        # SAVE
-        # ─────────────────────────────────────────
         with transaction.atomic():
-
-            # ✅ Sirf success jitna credit katega
             if not user.is_admin() and success > 0:
-
                 user.credit -= success
                 user.save()
-
                 CreditLog.objects.create(
                     from_user=user,
                     to_user=None,
@@ -662,41 +675,17 @@ def send_whatsapp(request):
                     amount=success,
                     description=f"Campaign '{campaign_name}' — {success} messages sent"
                 )
-
-            # ✅ CAMPAIGN SAVE
             Campaign.objects.create(
                 user=user,
                 message=message,
                 total=len(numbers),
                 success=success,
                 failed=failed,
-
-                # 🔥 NEW FIELD
-                results=number_results
+                results=number_results,
+                status="completed",
+                campaign_name=campaign_name,
             )
 
-        # ─────────────────────────────────────────
-        # ADMIN NOTIFY
-        # ─────────────────────────────────────────
-        if len(numbers) > 100:
-
-            try:
-                notify_admin(
-                    campaign_name,
-                    len(numbers),
-                    success,
-                    failed,
-                    nonwa,
-                    rejected,
-                    user.username
-                )
-
-            except:
-                pass
-
-        # ─────────────────────────────────────────
-        # RESPONSE
-        # ─────────────────────────────────────────
         return Response({
             "status":      "done",
             "success":     success,
@@ -704,22 +693,11 @@ def send_whatsapp(request):
             "nonwa":       nonwa,
             "rejected":    rejected,
             "credit_left": "unlimited" if user.is_admin() else user.credit,
-
-            "files_sent": len(file_list),
-
-            "file_urls": [
-                f[0] for f in file_list
-            ],
-
-            # 🔥 NUMBER WISE RESULT RESPONSE
-            "results": number_results
+            "files_sent":  len(file_list),
+            "file_urls":   [f[0] for f in file_list],
+            "results":     number_results
         })
 
     except Exception as e:
-
         print("SEND ERROR:", e)
-
-        return Response({
-            "status": "error",
-            "message": str(e)
-        })
+        return Response({"status": "error", "message": str(e)})

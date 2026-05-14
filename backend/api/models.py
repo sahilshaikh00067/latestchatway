@@ -46,16 +46,25 @@ class CreditLog(models.Model):
 
     def __str__(self):
         return f"{self.action} {self.amount} | {self.from_user} → {self.to_user}"
-
 class Campaign(models.Model):
-    user    = models.ForeignKey(User, on_delete=models.CASCADE)
-    message = models.TextField()
-    total   = models.IntegerField(default=0)
-    success = models.IntegerField(default=0)
-    failed  = models.IntegerField(default=0)
-    created_at = models.DateTimeField(auto_now_add=True)
-    # ✅ Yeh add karo
-    results = models.JSONField(default=list, blank=True)
+    STATUS_CHOICES = (
+        ("pending",   "Pending"),
+        ("completed", "Completed"),
+    )
+
+    user          = models.ForeignKey(User, on_delete=models.CASCADE)
+    campaign_name = models.CharField(max_length=255, blank=True, default="")  # ← NEW
+    message       = models.TextField()
+    total         = models.IntegerField(default=0)
+    success       = models.IntegerField(default=0)
+    failed        = models.IntegerField(default=0)
+    status        = models.CharField(                                          # ← NEW
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default="completed"
+    )
+    created_at    = models.DateTimeField(auto_now_add=True)
+    results       = models.JSONField(default=list, blank=True)
 
     def __str__(self):
-        return f"{self.user.username} - {self.created_at.strftime('%d-%m-%Y %H:%M')}"
+        return f"{self.user.username} - {self.campaign_name} - {self.status}"
