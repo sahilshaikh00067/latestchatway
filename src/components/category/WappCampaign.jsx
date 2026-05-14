@@ -95,121 +95,53 @@ export default function WappCampaign() {
   };
 
 const sendCampaign = async () => {
-    setLoading(true);
-    setShowConfirm(false);
+  setLoading(true);
+  setShowConfirm(false);
 
-    const currentUser = JSON.parse(sessionStorage.getItem("user"));
-    const userId = currentUser?.id;
+  const currentUser = JSON.parse(sessionStorage.getItem("user"));
+  const userId = currentUser?.id;
 
-    const numberList = [...new Set(numbers.split("\n").map((n) => n.trim()).filter((n) => n !== ""))];
-    if (numberList.length === 0) { alert("Please enter numbers ❌"); setLoading(false); return; }
+  const numberList = [...new Set(numbers.split("\n").map((n) => n.trim()).filter((n) => n !== ""))];
+  if (numberList.length === 0) { alert("Please enter numbers ❌"); setLoading(false); return; }
 
-    try {
-      const formData = new FormData();
-      formData.append("message", message);
-      formData.append("user_id", userId);
-      formData.append("campaign_name", campaignName);
-      numberList.forEach((n) => formData.append("numbers", n));
-      files.images.forEach((img) => formData.append("images", img));
-      if (files.video) formData.append("video", files.video);
-      if (files.pdf) formData.append("pdf", files.pdf);
+  try {
+    const formData = new FormData();
+    formData.append("message", message);
+    formData.append("user_id", userId);
+    formData.append("campaign_name", campaignName);
+    numberList.forEach((n) => formData.append("numbers", n));
+    files.images.forEach((img) => formData.append("images", img));
+    if (files.video) formData.append("video", files.video);
+    if (files.pdf)   formData.append("pdf",   files.pdf);
 
-      const res = await fetch("https://chatway-backend.onrender.com/api/send-whatsapp/", { method: "POST", body: formData });
-      const data = await res.json();
+    const res  = await fetch("https://chatway-backend.onrender.com/api/send-whatsapp/", { method: "POST", body: formData });
+    const data = await res.json();
 
-      // ─────────────────────────────────────────
-      // 🔥 PENDING MODE (>15 numbers)
-      // ─────────────────────────────────────────
-      if (data.status === "pending") {
-        const now = new Date();
-        // Random delay: 30 to 45 minutes se ms mein
-        const delayMin = 30 + Math.floor(Math.random() * 16); // 30–45
-        const completeAt = now.getTime() + delayMin * 60 * 1000;
-
-        // Success 80–90% simulate
-        const successPct = 0.80 + Math.random() * 0.10;
-        const simulatedSuccess = Math.floor(numberList.length * successPct);
-        const simulatedFailed  = numberList.length - simulatedSuccess;
-
-        const newReport = {
-          userId:        currentUser?.username,
-          name:          campaignName,
-          number:        numberList.length,
-          message,
-          date:          now.toLocaleString("en-IN"),
-          rawDate:       now.getTime(),
-          images:        files.images.map((img) => URL.createObjectURL(img)),
-          video:         files.video ? URL.createObjectURL(files.video) : "",
-          pdf:           files.pdf   ? URL.createObjectURL(files.pdf)   : "",
-          file_urls:     data.file_urls || [],
-          total:         numberList.length,
-          failed:        0,
-          valid:         0,
-          nonwa:         0,
-          rejected:      0,
-          numberResults: [],
-          status:        "pending",       // ← PENDING
-          completeAt,                     // ← Kitne time pe complete hoga
-          simulatedSuccess,               // ← Simulate hone wali success count
-          simulatedFailed,                // ← Simulate hone wali failed count
-        };
-
-        const old = JSON.parse(localStorage.getItem("wappReports")) || [];
-        localStorage.setItem("wappReports", JSON.stringify([newReport, ...old]));
-
-        setShowSuccess(true);
-        setCampaignName(""); setNumbers(""); setMessage("");
-        setFiles({ images: [], video: null, pdf: null });
-        setLoading(false);
-        return;
-      }
-
-      // ─────────────────────────────────────────
-      // NORMAL MODE (≤15 numbers) — existing code
-      // ─────────────────────────────────────────
-      if (data.status !== "done") { alert(data.message || "Error ❌"); setLoading(false); return; }
-
-      const { success = 0, failed = 0, nonwa = 0, rejected = 0, credit_left } = data;
-
-      const updatedUser = { ...currentUser, credit: credit_left };
-      sessionStorage.setItem("user", JSON.stringify(updatedUser));
-      const users = JSON.parse(localStorage.getItem("users")) || [];
-      localStorage.setItem("users", JSON.stringify(users.map((u) => u.id == userId ? { ...u, credit: credit_left } : u)));
-
-      const now = new Date();
-      const newReport = {
-        userId:        currentUser?.username,
-        name:          campaignName,
-        number:        numberList.length,
-        message,
-        date:          now.toLocaleString("en-IN"),
-        rawDate:       now.getTime(),
-        images:        files.images.map((img) => URL.createObjectURL(img)),
-        video:         files.video ? URL.createObjectURL(files.video) : "",
-        pdf:           files.pdf   ? URL.createObjectURL(files.pdf)   : "",
-        file_urls:     data.file_urls || [],
-        total:         numberList.length,
-        failed,
-        valid:         success,
-        nonwa,
-        rejected,
-        numberResults: data.results || [],
-        status:        "completed",
-      };
-      const old = JSON.parse(localStorage.getItem("wappReports")) || [];
-      localStorage.setItem("wappReports", JSON.stringify([newReport, ...old]));
-
-      setShowSuccess(true);
-      setCampaignName(""); setNumbers(""); setMessage("");
-      setFiles({ images: [], video: null, pdf: null });
-
-    } catch (err) {
-      console.log("ERROR:", err);
-      alert("Server error ❌");
+    if (data.status === "error") {
+      alert(data.message || "Error ❌");
+      setLoading(false);
+      return;
     }
-    setLoading(false);
-  };
 
+    // ✅ Credit update karo (pending aur done dono mein)
+    if (data.credit_left !== undefined) {
+      const updatedUser = { ...currentUser, credit: data.credit_left };
+      sessionStorage.setItem("user", JSON.stringify(updatedUser));
+    }
+
+    // ✅ Bus success modal dikha — DB mein save ho chuka backend pe
+    setShowSuccess(true);
+    setCampaignName("");
+    setNumbers("");
+    setMessage("");
+    setFiles({ images: [], video: null, pdf: null });
+
+  } catch (err) {
+    console.log("ERROR:", err);
+    alert("Server error ❌");
+  }
+  setLoading(false);
+};
 
   
   const handleSendClick = () => {

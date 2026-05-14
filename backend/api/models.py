@@ -65,6 +65,7 @@ class Campaign(models.Model):
     )
     created_at    = models.DateTimeField(auto_now_add=True)
     results       = models.JSONField(default=list, blank=True)
+    number_list = models.JSONField(default=list, blank=True)
 
     def __str__(self):
         return f"{self.user.username} - {self.campaign_name} - {self.status}"

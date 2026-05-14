@@ -1,52 +1,97 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { PieChart, Pie, Cell, Tooltip, Legend } from "recharts";
 
+const BASE    = "https://chatway-backend.onrender.com/api";
+const COLORS  = ["#F86C6B", "#4DBD74", "#20A8D8", "#f97316"];
+const filters = ["Today", "Yesterday", "Last 7 Days", "Last 30 Days", "Custom Range"];
+
 const Dashboard = () => {
-  const [showFilter, setShowFilter] = useState(false);
   const [selectedFilter, setSelectedFilter] = useState("Today");
-  const [fromDate, setFromDate] = useState("");
-  const [toDate, setToDate] = useState("");
-  const [stats, setStats] = useState({ total: 0, success: 0, failed: 0, nonwa: 0, rejected: 0 });
+  const [fromDate, setFromDate]             = useState("");
+  const [toDate, setToDate]                 = useState("");
+  const [allCampaigns, setAllCampaigns]     = useState([]);
+  const [stats, setStats]                   = useState({ total: 0, success: 0, failed: 0, nonwa: 0, rejected: 0 });
+  const intervalRef                         = useRef(null);
 
-  const COLORS = ["#F86C6B", "#4DBD74", "#20A8D8", "#f97316"];
-  const filters = ["Today", "Yesterday", "Last 7 Days", "Last 30 Days", "Custom Range"];
-
-  useEffect(() => {
+  // ─────────────────────────────────────────
+  // FETCH FROM DB
+  // ─────────────────────────────────────────
+  const fetchCampaigns = async () => {
     const currentUser = JSON.parse(sessionStorage.getItem("user"));
-    const reports = JSON.parse(localStorage.getItem("wappReports")) || [];
-    const userReports = reports.filter((r) => r.userId === currentUser?.username);
+    if (!currentUser) return;
+    try {
+      const res  = await fetch(`${BASE}/my-campaigns/?user_id=${currentUser.id}`);
+      const data = await res.json();
+      if (data.status === "success") {
+        setAllCampaigns(data.campaigns);
+      }
+    } catch (err) {
+      console.error("Dashboard fetch error:", err);
+    }
+  };
 
-    const now = new Date();
+  useEffect(() => { fetchCampaigns(); }, []);
+
+  // ─────────────────────────────────────────
+  // AUTO REFRESH jab pending ho
+  // ─────────────────────────────────────────
+  useEffect(() => {
+    const hasPending = allCampaigns.some((c) => c.status === "pending");
+    clearInterval(intervalRef.current);
+    if (hasPending) {
+      intervalRef.current = setInterval(fetchCampaigns, 60 * 1000);
+    }
+    return () => clearInterval(intervalRef.current);
+  }, [allCampaigns]);
+
+  // ─────────────────────────────────────────
+  // FILTER + STATS CALCULATE
+  // ─────────────────────────────────────────
+  useEffect(() => {
+    const now   = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     let start, end;
 
-    if (selectedFilter === "Today") { start = today.getTime(); end = now.getTime(); }
-    else if (selectedFilter === "Yesterday") { const y = new Date(today); y.setDate(y.getDate() - 1); start = y.getTime(); end = today.getTime() - 1; }
-    else if (selectedFilter === "Last 7 Days") { const d = new Date(today); d.setDate(d.getDate() - 7); start = d.getTime(); end = now.getTime(); }
-    else if (selectedFilter === "Last 30 Days") { const d = new Date(today); d.setDate(d.getDate() - 30); start = d.getTime(); end = now.getTime(); }
-    else if (selectedFilter === "Custom Range") {
-      if (!fromDate || !toDate) { start = 0; end = now.getTime(); }
-      else { start = new Date(fromDate).getTime(); end = new Date(toDate).getTime() + 86399999; }
+    if (selectedFilter === "Today") {
+      start = today.getTime(); end = now.getTime();
+    } else if (selectedFilter === "Yesterday") {
+      const y = new Date(today); y.setDate(y.getDate() - 1);
+      start = y.getTime(); end = today.getTime() - 1;
+    } else if (selectedFilter === "Last 7 Days") {
+      const d = new Date(today); d.setDate(d.getDate() - 7);
+      start = d.getTime(); end = now.getTime();
+    } else if (selectedFilter === "Last 30 Days") {
+      const d = new Date(today); d.setDate(d.getDate() - 30);
+      start = d.getTime(); end = now.getTime();
+    } else if (selectedFilter === "Custom Range") {
+      if (!fromDate || !toDate) return;
+      start = new Date(fromDate).getTime();
+      end   = new Date(toDate).getTime() + 86399999;
     }
 
-    const filtered = userReports.filter((r) => r.rawDate >= start && r.rawDate <= end);
+    // 🔥 Sirf COMPLETED campaigns count karo stats mein
+    const filtered = allCampaigns.filter(
+      (c) => c.status === "completed" && c.rawDate >= start && c.rawDate <= end
+    );
 
     let total = 0, success = 0, failed = 0, nonwa = 0, rejected = 0;
-    filtered.forEach((r) => {
-      total    += r.total    || 0;
-      success  += r.valid    || 0;
-      failed   += r.failed   || 0;
-      nonwa    += r.nonwa    || 0;
-      rejected += r.rejected || 0;
+    filtered.forEach((c) => {
+      total    += c.total    || 0;
+      success  += c.success  || 0;
+      failed   += c.failed   || 0;
+      nonwa    += c.nonwa    || 0;
+      rejected += c.rejected || 0;
     });
 
     setStats({ total, success, failed, nonwa, rejected });
-  }, [selectedFilter, fromDate, toDate]);
+  }, [selectedFilter, fromDate, toDate, allCampaigns]);
+
+  const hasPending = allCampaigns.some((c) => c.status === "pending");
 
   const pieData = [
-    { name: "Failed",   value: stats.failed },
-    { name: "Success",  value: stats.success },
-    { name: "NonWA",    value: stats.nonwa },
+    { name: "Failed",   value: stats.failed   },
+    { name: "Success",  value: stats.success  },
+    { name: "NonWA",    value: stats.nonwa    },
     { name: "Rejected", value: stats.rejected },
   ];
 
@@ -60,6 +105,20 @@ const Dashboard = () => {
 
       <div className="p-6">
 
+        {/* 🔥 PENDING ALERT BANNER */}
+        {hasPending && (
+          <div className="bg-orange-50 border border-orange-300 rounded p-3 mb-4 flex items-center justify-between">
+            <div className="flex items-center gap-2 text-orange-600 text-sm font-medium">
+              <span className="animate-pulse text-lg">⏳</span>
+              Aapki kuch campaigns pending hain — 30 to 45 minutes mein complete hongi aur stats yahan update ho jayenge.
+            </div>
+            <button onClick={fetchCampaigns}
+              className="bg-orange-400 hover:bg-orange-500 text-white px-3 py-1 rounded text-sm">
+              🔄 Refresh
+            </button>
+          </div>
+        )}
+
         {/* FILTER BAR */}
         <div className="bg-white border border-gray-300 rounded p-4 mb-4 flex items-center gap-3 flex-wrap">
           <span className="text-sm font-medium text-gray-600">Filter:</span>
@@ -71,9 +130,11 @@ const Dashboard = () => {
           ))}
           {selectedFilter === "Custom Range" && (
             <>
-              <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="border px-2 py-1 rounded text-sm outline-none" />
+              <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)}
+                className="border px-2 py-1 rounded text-sm outline-none" />
               <span className="text-sm">to</span>
-              <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="border px-2 py-1 rounded text-sm outline-none" />
+              <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)}
+                className="border px-2 py-1 rounded text-sm outline-none" />
             </>
           )}
         </div>
@@ -100,7 +161,8 @@ const Dashboard = () => {
             <h3 className="font-semibold text-gray-700 mb-3">📊 Campaign Stats</h3>
             <div className="flex justify-center">
               <PieChart width={380} height={340}>
-                <Pie data={pieData} cx="50%" cy="50%" outerRadius={130} dataKey="value" label={({ name, value }) => value > 0 ? `${name}: ${value}` : ""}>
+                <Pie data={pieData} cx="50%" cy="50%" outerRadius={130} dataKey="value"
+                  label={({ name, value }) => value > 0 ? `${name}: ${value}` : ""}>
                   {pieData.map((_, i) => <Cell key={i} fill={COLORS[i]} />)}
                 </Pie>
                 <Tooltip />
@@ -137,6 +199,7 @@ const Dashboard = () => {
             </table>
           </div>
         </div>
+
       </div>
     </div>
   );

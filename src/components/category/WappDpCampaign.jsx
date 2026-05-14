@@ -124,71 +124,51 @@ export default function WappDpCampaign() {
   // ===============================
   // 🔥 SEND CAMPAIGN
   // ===============================
-  const sendCampaign = async () => {
-    setLoading(true);
-    setShowConfirm(false);
+const sendCampaign = async () => {
+  setLoading(true);
+  setShowConfirm(false);
 
-    const currentUser = JSON.parse(sessionStorage.getItem("user"));
-    const userId = currentUser?.id;
+  const currentUser = JSON.parse(sessionStorage.getItem("user"));
+  const userId = currentUser?.id;
 
-    if (numberList.length === 0) { alert("Please enter numbers ❌"); setLoading(false); return; }
+  if (numberList.length === 0) { alert("Please enter numbers ❌"); setLoading(false); return; }
 
-    try {
-      const formData = new FormData();
-      formData.append("message", message);
-      formData.append("user_id", userId);
-      formData.append("campaign_name", campaignName);
-      numberList.forEach((n) => formData.append("numbers", n));
-      if (dp) formData.append("dp", dp);
-      images.forEach((img) => formData.append("images", img));
-      if (video) formData.append("video", video);
-      if (pdf) formData.append("pdf", pdf);
+  try {
+    const formData = new FormData();
+    formData.append("message", message);
+    formData.append("user_id", userId);
+    formData.append("campaign_name", campaignName);
+    numberList.forEach((n) => formData.append("numbers", n));
+    if (dp) formData.append("dp", dp);
+    images.forEach((img) => formData.append("images", img));
+    if (video) formData.append("video", video);
+    if (pdf)   formData.append("pdf",   pdf);
 
-      const res = await fetch("https://chatway-backend.onrender.com/api/send-whatsapp/", { method: "POST", body: formData });
-      const data = await res.json();
+    const res  = await fetch("https://chatway-backend.onrender.com/api/send-whatsapp/", { method: "POST", body: formData });
+    const data = await res.json();
 
-      if (data.status !== "done") { alert(data.message || "Error ❌"); setLoading(false); return; }
-
-      const { success = 0, failed = 0, nonwa = 0, rejected = 0, credit_left } = data;
-
-      // ✅ CREDIT UPDATE
-      const updatedUser = { ...currentUser, credit: credit_left };
-      sessionStorage.setItem("user", JSON.stringify(updatedUser));
-      const users = JSON.parse(localStorage.getItem("users")) || [];
-      localStorage.setItem("users", JSON.stringify(users.map((u) => u.id == userId ? { ...u, credit: credit_left } : u)));
-
-      // ✅ SAVE REPORT
-      const now = new Date();
-      const newReport = {
-        userId: currentUser?.username,
-        name: campaignName,
-        number: numberList.length,
-        message,
-        date: now.toLocaleString("en-IN"),
-        rawDate: now.getTime(),
-        images: images.map((img) => URL.createObjectURL(img)),
-        video: video ? URL.createObjectURL(video) : "",
-        pdf: pdf ? URL.createObjectURL(pdf) : "",
-        file_urls: data.file_urls || [],
-        total: numberList.length,
-        failed,
-        valid: success,
-        nonwa,
-        rejected,
-        numberResults: data.results || [],
-      };
-      const old = JSON.parse(localStorage.getItem("wappReports")) || [];
-      localStorage.setItem("wappReports", JSON.stringify([newReport, ...old]));
-
-      setShowSuccess(true);
-      resetForm();
-
-    } catch (err) {
-      console.log("ERROR:", err);
-      alert("Server error ❌");
+    if (data.status === "error") {
+      alert(data.message || "Error ❌");
+      setLoading(false);
+      return;
     }
-    setLoading(false);
-  };
+
+    // ✅ Credit update karo (pending aur done dono mein)
+    if (data.credit_left !== undefined) {
+      const updatedUser = { ...currentUser, credit: data.credit_left };
+      sessionStorage.setItem("user", JSON.stringify(updatedUser));
+    }
+
+    // ✅ Bus success modal dikha — DB mein save ho chuka backend pe
+    setShowSuccess(true);
+    resetForm();
+
+  } catch (err) {
+    console.log("ERROR:", err);
+    alert("Server error ❌");
+  }
+  setLoading(false);
+};
 
   const handleSendClick = () => {
     if (!campaignName || !numbers || !message) { alert("Fill all fields ❌"); return; }
