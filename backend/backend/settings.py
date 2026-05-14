@@ -8,8 +8,13 @@ DEBUG = False
 
 ALLOWED_HOSTS = [
     ".onrender.com",
+    "cloudwhatsapp.in",
+    "www.cloudwhatsapp.in",
 ]
-
+CSRF_TRUSTED_ORIGINS = [
+    "https://cloudwhatsapp.in",
+    "https://www.cloudwhatsapp.in",
+]
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -40,8 +45,9 @@ MIDDLEWARE = [
 # =========================
 CORS_ALLOWED_ORIGINS = [
     "https://chatway.vercel.app",
+    "https://cloudwhatsapp.in",
+    "https://www.cloudwhatsapp.in",
 ]
-
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_METHODS = [
     'DELETE',
