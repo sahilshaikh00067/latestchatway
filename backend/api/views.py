@@ -11,11 +11,7 @@ USERNAME = "APIDEMO"
 
 # 🔥 Jitne tokens utne numbers se parallel send hoga
 TOKENS = [
-    "REROSE5POUh4MVdLd2oyMUNOV3BOQT09",
     "c0Z6bG9mYTlTQmFMeEVXYlgyRzdzZz09",
-    # Naye tokens yahan add karo:
-    # "TEEN_WALA_TOKEN_YAHAN",
-    # "CHAUTHA_TOKEN_YAHAN",
 ]
 
 TOKEN_COUNT = len(TOKENS)  # Automatically count hoga
