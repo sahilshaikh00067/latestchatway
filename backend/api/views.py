@@ -11,12 +11,11 @@ USERNAME = "APIDEMO"
 
 # 🔥 Jitne tokens utne numbers se parallel send hoga
 TOKENS = [
-    "SWlqZWN4NmpGVGN5a01NMUhSZzdlQT09",
-    "bEJURktLb0Zzdm9WYXMxZGlkQjVYdz09",
+    "cE83aCt6Z0EwV3ZsTVdrdnZQMmRsUT09",
+    "QzBjdWtPWDhYYkg0UGlXNk83dGpUQT09",
+    "ZDVVWENwTXMrcHhnNkVhS09rcFZrdz09",
     "TC9CK2JoTkl6c1FxaHhuekhRTnVFQT09",
-    "aHVKY004czFpV0MwaWlpdUVrSkVHZz09",
-    "ZDNlLzIrakdZQW9pQktLVXl1V0hHdz09",
-    ""
+    "SWlqZWN4NmpGVGN5a01NMUhSZzdlQT09",
 
 ]
 
