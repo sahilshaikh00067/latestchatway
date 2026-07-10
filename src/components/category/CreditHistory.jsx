@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Calendar } from "lucide-react";
 
-const API = "https://chatway-backend.onrender.com/api";
+const API = "http://127.0.0.1:8000/api";
 
 const CreditHistory = () => {
   const loggedUser = JSON.parse(sessionStorage.getItem("user"));

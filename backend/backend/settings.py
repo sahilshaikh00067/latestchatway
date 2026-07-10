@@ -7,11 +7,14 @@ SECRET_KEY = 'django-insecure-%3x!z6^b07cqqh))o&o*l&u8tvp*o6$vv$nyr=p2dn(i_45+-0
 DEBUG = False
 
 ALLOWED_HOSTS = [
+    "127.0.0.1",
+    "localhost",
     ".onrender.com",
     "cloudwhatsapp.in",
     "www.cloudwhatsapp.in",
 ]
 CSRF_TRUSTED_ORIGINS = [
+    "http://127.0.0.1:5173",
     "http://localhost:5173",
     "https://chatway.vercel.app",
     "https://cloudwhatsapp.in",
@@ -47,12 +50,12 @@ MIDDLEWARE = [
 # 🔥 CORS SETTINGS
 # =========================
 CORS_ALLOWED_ORIGINS = [
+    "http://127.0.0.1:5173",
     "http://localhost:5173",
     "https://chatway.vercel.app",
     "https://cloudwhatsapp.in",
     "https://www.cloudwhatsapp.in",
 ]
-
 
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_METHODS = [
@@ -97,13 +100,23 @@ WSGI_APPLICATION = 'backend.wsgi.application'
 import os
 import dj_database_url
 
-DATABASES = {
-    "default": dj_database_url.config(
-        default=os.environ.get("DATABASE_URL"),
-        conn_max_age=0,
-        ssl_require=True,
-    )
-}
+DATABASE_URL = os.environ.get("DATABASE_URL")
+
+if DATABASE_URL:
+    DATABASES = {
+        "default": dj_database_url.parse(
+            DATABASE_URL,
+            conn_max_age=0,
+            ssl_require=True,
+        )
+    }
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "db.sqlite3",
+        }
+    }
 
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},

@@ -11,12 +11,10 @@ USERNAME = "APIDEMO"
 
 # 🔥 Jitne tokens utne numbers se parallel send hoga
 TOKENS = [
-    "cE83aCt6Z0EwV3ZsTVdrdnZQMmRsUT09",
-    "QzBjdWtPWDhYYkg0UGlXNk83dGpUQT09",
-    "ZDVVWENwTXMrcHhnNkVhS09rcFZrdz09",
     "TC9CK2JoTkl6c1FxaHhuekhRTnVFQT09",
-    "SWlqZWN4NmpGVGN5a01NMUhSZzdlQT09",
-
+    "aHVKY004czFpV0MwaWlpdUVrSkVHZz09",
+    "T20rUUJYc3NiOUZjUlVIT1BBajUyQT09",
+    "aHFOQllaL1JhSUhjbnlMZWN4YTEwZz09",
 ]
 
 TOKEN_COUNT = len(TOKENS)  # Automatically count hoga
@@ -30,18 +28,21 @@ def login(request):
     try:
         username = request.data.get("username")
         password = request.data.get("password")
+        print("USERNAME:", username)
+        print("PASSWORD:", password)
         user = User.objects.filter(username=username, password=password).first()
+        print("FOUND USER:", user)
         if not user:
             return Response({"status": "failed", "message": "Invalid username or password ❌"})
         if user.status != "Active":
             return Response({"status": "failed", "message": "Account is deactivated ❌"})
         return Response({
-            "status":   "success",
-            "user_id":  user.id,
-            "username": user.username,
-            "role":     user.role,
-            "credit":   user.credit,
-        })
+    "status": "success",
+    "user_id": user.id,
+    "username": user.username,
+    "role": user.role,
+    "credit": user.credit,
+})
     except Exception as e:
         return Response({"status": "error", "message": str(e)})
 

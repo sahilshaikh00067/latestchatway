@@ -22,15 +22,15 @@ function Login() {
       <div className="bg-white shadow rounded flex overflow-hidden w-[1000px]">
 
         {/* LEFT IMAGE */}
-        <div className="w-[50%] flex items-center justify-center bg-white">
+        <div className="w-[65%] flex items-center justify-center bg-white">
           <img src="/login.png" alt="login" className="w-[100%]" />
         </div>
 
         {/* RIGHT FORM */}
-        <div className="w-[50%] p-10">
+        <div className="w-[65%] p-10">
 
-          <h2 className="text-4xl font-medium mb-3">Login</h2>
-          <p className="text-gray-500 mb-8 text-lg">
+          <h2 className="text-4xl font-medium mb-1">Login</h2>
+          <p className="text-gray-500 mb-3 text-lg">
             Just sign in if you have an account.
           </p>
 
@@ -41,13 +41,15 @@ function Login() {
             onSubmit={async (values, { setSubmitting }) => {
 
               try {
-                const res = await fetch("https://chatway-backend.onrender.com/api/login/", {
+                const res = await fetch("http://127.0.0.1:8000/api/login/", {
                   method: "POST",
                   headers: {
                     "Content-Type": "application/json",
                   },
                   body: JSON.stringify(values),
                 });
+                console.log("STATUS:", res.status);
+                console.log("HTTP STATUS:", res.status);
 
                 const data = await res.json();
 
@@ -55,31 +57,25 @@ function Login() {
 
                 if (data.status === "success") {
 
-                  // 🔥 CLEAR OLD
                   sessionStorage.clear();
 
-                  // 🔥 SAVE CORRECT USER
                   sessionStorage.setItem("user_id", data.user_id);
 
                   sessionStorage.setItem("user", JSON.stringify({
                     id: data.user_id,
-                    username: values.username,
+                    username: data.username,
                     role: data.role,
                     credit: data.credit
                   }));
 
                   sessionStorage.setItem("role", data.role);
 
-                  console.log("SAVED USER_ID:", data.user_id);
+                  console.log("SAVED USER:", sessionStorage.getItem("user"));
 
-                  setMessage("Login successful ✅");
-
-                  setTimeout(() => {
-                    navigate("/dashboard");
-                  }, 500);
+                  navigate("/dashboard");
 
                 } else {
-                  setMessage("Invalid username or password ❌");
+                  setMessage(data.message || "Invalid username or password ❌");
                 }
 
               } catch (err) {
@@ -107,7 +103,7 @@ function Login() {
                   onChange={handleChange}
                   onBlur={handleBlur}
                   value={values.username}
-                  className="input mb-5 text-lg"
+                  className="input mb-2 text-lg"
                 />
                 <p className="error">
                   {errors.username && touched.username && errors.username}
@@ -120,7 +116,7 @@ function Login() {
                   onChange={handleChange}
                   onBlur={handleBlur}
                   value={values.password}
-                  className="input mb-5 text-lg"
+                  className="input mb-1 text-lg"
                 />
                 <p className="error">
                   {errors.password && touched.password && errors.password}
@@ -131,7 +127,7 @@ function Login() {
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="btn w-full mt-4 text-xl py-3"
+                  className="btn w-full mt-2 text-xl py-3"
                 >
                   Login
                 </button>

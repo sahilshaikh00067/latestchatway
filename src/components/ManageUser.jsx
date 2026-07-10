@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { FaKey, FaEdit } from "react-icons/fa";
 import { RiDeleteBinLine } from "react-icons/ri";
 
-const API = "https://chatway-backend.onrender.com/api";
+const API = "http://127.0.0.1:8000/api";
 
 export default function ManageUser() {
   const navigate   = useNavigate();

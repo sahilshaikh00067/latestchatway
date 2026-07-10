@@ -50,36 +50,36 @@ export default function Header() {
 
   return (
     <div>
-      <header className="bg-[#2D3748] text-white shadow">
+      <header className="bg-[#2D3748] text-white shadow ">
 
         <nav className="mx-auto flex max-w-8xl items-center justify-between px-4 py-3">
 
           {/* LEFT SIDE */}
           <div className="flex items-center gap-3">
             <button onClick={() => setCollapsed(!collapsed)}>
-              <IoMenu size={18} />
+              <IoMenu size={23} />
             </button>
           </div>
 
           {/* RIGHT SIDE BUTTONS */}
-          <div className="hidden lg:flex items-center gap-2">
+          <div className="hidden lg:flex items-center">
 
             {/* 🔥 ROLE FIX */}
             {role !== "user" && (
               <Link to="/manageuser">
-                <button className="px-4 py-1 text-sm text-white bg-[#20A8D8] rounded hover:opacity-90 transition">
+                <button className="px-4 py-1 text-sm text-white bg-[#20A8D8] hover:opacity-90 transition">
                   Credit
                 </button>
               </Link>
             )}
 
-            <button className="px-4 py-1 text-sm text-white bg-[#fa6f7d] rounded hover:opacity-90 transition">
+            <button className="px-5 py-1 text-sm text-white bg-[#F86C6B] hover:opacity-90 transition">
               WHATSAPP : {user?.credit || 0}
             </button>
 
             <button
               onClick={handleLogout}
-              className="px-4 py-1 text-sm text-white border border-[#FFC107] rounded hover:bg-[#FFC107] hover:text-black transition"
+              className="px-4 py-2 ml-2 text-sm text-white border border-[#FFC107] rounded hover:bg-[#FFC107] hover:text-black transition"
             >
               Log Out
             </button>
@@ -171,7 +171,7 @@ export default function Header() {
                 button: ({ active }) => ({
                   backgroundColor: active ? "#3a4248" : "#2D3748",
                   color: "white",
-                  fontWeight: "350",
+                  fontWeight: "400",
                   transition: "0.3s",
                   width: "100%",
                   "&:hover": {
@@ -227,7 +227,7 @@ export default function Header() {
             <div className="mt-auto">
               <button
                 onClick={handleLogout}
-                className="w-full font-normal bg-[#4DBD74] text-white py-2 hover:bg-[#3da863]"
+                className="w-full font-normal bg-[#4DBD74] text-white py-3 hover:bg-[#3da863]"
               >
                 Logout →
               </button>

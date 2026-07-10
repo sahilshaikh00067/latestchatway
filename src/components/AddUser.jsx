@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-const API = "https://chatway-backend.onrender.com/api";
+const API = "http://127.0.0.1:8000/api";
 
 const AddUser = () => {
   const navigate = useNavigate();

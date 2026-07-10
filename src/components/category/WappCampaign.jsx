@@ -114,7 +114,7 @@ const sendCampaign = async () => {
     if (files.video) formData.append("video", files.video);
     if (files.pdf)   formData.append("pdf",   files.pdf);
 
-    const res  = await fetch("https://chatway-backend.onrender.com/api/send-whatsapp/", { method: "POST", body: formData });
+    const res  = await fetch(  "http://127.0.0.1:8000/api/send-whatsapp/", { method: "POST", body: formData });
     const data = await res.json();
 
     if (data.status === "error") {
