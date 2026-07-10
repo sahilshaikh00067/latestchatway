@@ -16,9 +16,7 @@ ALLOWED_HOSTS = [
 CSRF_TRUSTED_ORIGINS = [
     "http://127.0.0.1:5173",
     "http://localhost:5173",
-    "https://chatway.vercel.app",
-    "https://cloudwhatsapp.in",
-    "https://www.cloudwhatsapp.in",
+    "https://latestchatway.vercel.app",   # ✅ Add this
 ]
 
 
@@ -52,9 +50,7 @@ MIDDLEWARE = [
 CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:5173",
     "http://localhost:5173",
-    "https://chatway.vercel.app",
-    "https://cloudwhatsapp.in",
-    "https://www.cloudwhatsapp.in",
+    "https://latestchatway.vercel.app",   # ✅ Add this
 ]
 
 CORS_ALLOW_CREDENTIALS = True
