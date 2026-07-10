@@ -12,9 +12,12 @@ ALLOWED_HOSTS = [
     "www.cloudwhatsapp.in",
 ]
 CSRF_TRUSTED_ORIGINS = [
+    "http://localhost:5173",
+    "https://chatway.vercel.app",
     "https://cloudwhatsapp.in",
     "https://www.cloudwhatsapp.in",
 ]
+
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -44,10 +47,13 @@ MIDDLEWARE = [
 # 🔥 CORS SETTINGS
 # =========================
 CORS_ALLOWED_ORIGINS = [
+    "http://localhost:5173",
     "https://chatway.vercel.app",
     "https://cloudwhatsapp.in",
     "https://www.cloudwhatsapp.in",
 ]
+
+
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_METHODS = [
     'DELETE',
@@ -88,13 +94,14 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'backend.wsgi.application'
 
-import dj_database_url
 import os
+import dj_database_url
 
 DATABASES = {
-    'default': dj_database_url.config(
-        default=os.environ.get('DATABASE_URL'),
-        conn_max_age=600
+    "default": dj_database_url.config(
+        default=os.environ.get("DATABASE_URL"),
+        conn_max_age=0,
+        ssl_require=True,
     )
 }
 
