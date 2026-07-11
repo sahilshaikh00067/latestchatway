@@ -79,7 +79,7 @@ export default function Header() {
 
             <button
               onClick={handleLogout}
-              className="px-4 py-2 ml-2 text-sm text-white border border-[#FFC107] rounded hover:bg-[#FFC107] hover:text-black transition"
+              className="px-4 py-2 ml-2 text-sm text-white border border-[#FFC107] rounded hover:bg-[#FFC107] hover:text-black transition cursor-pointer"
             >
               Log Out
             </button>
@@ -134,7 +134,7 @@ export default function Header() {
 
               <button
                 onClick={handleLogout}
-                className="text-left text-red-500 mt-4"
+                className="text-left text-red-500 mt-4 cursor-pointer"
               >
                 Logout
               </button>
@@ -227,7 +227,7 @@ export default function Header() {
             <div className="mt-auto">
               <button
                 onClick={handleLogout}
-                className="w-full font-normal bg-[#4DBD74] text-white py-3 hover:bg-[#3da863]"
+                className="w-full font-normal bg-[#4DBD74] text-white py-3 hover:bg-[#3da863] cursor-pointer"
               >
                 Logout →
               </button>
