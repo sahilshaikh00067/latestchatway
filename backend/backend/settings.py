@@ -19,7 +19,7 @@ CSRF_TRUSTED_ORIGINS = [
     "https://latestchatway.vercel.app",
 
     "https://cloudwhatsapp.in",
-    "https://www.cloudwhatsapp.in",
+    "https://latestchatway.onrender.com",
 ]
 
 
@@ -57,6 +57,7 @@ CORS_ALLOWED_ORIGINS = [
 
     "https://cloudwhatsapp.in",
     "https://www.cloudwhatsapp.in",
+    "https://latestchatway.onrender.com",
 ]
 
 CORS_ALLOW_CREDENTIALS = True

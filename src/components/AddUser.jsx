@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-const API = "https://www.cloudwhatsapp.in/api";
+const API = "https://latestchatway.onrender.com/api";
 
 const AddUser = () => {
   const navigate = useNavigate();

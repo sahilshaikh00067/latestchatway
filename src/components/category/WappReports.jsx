@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from "react";
 import { Calendar } from "lucide-react";
 import * as XLSX from "xlsx";
 
-const BASE = "https://www.cloudwhatsapp.in/api";
+const BASE = "https://latestchatway.onrender.com/api";
 
 
 const WappReports = () => {

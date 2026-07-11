@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Calendar } from "lucide-react";
 
-const API = "https://www.cloudwhatsapp.in/api";
+const API = "https://latestchatway.onrender.com/api";
 
 const CreditHistory = () => {
   const loggedUser = JSON.parse(sessionStorage.getItem("user"));
