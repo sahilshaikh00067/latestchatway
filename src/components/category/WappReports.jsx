@@ -2,43 +2,48 @@ import React, { useEffect, useState, useRef } from "react";
 import { Calendar } from "lucide-react";
 import * as XLSX from "xlsx";
 
-const BASE = "https://latestchatway.onrender.com/api";
+const BASE = "https://www.cloudwhatsapp.in/api";
 
 
 const WappReports = () => {
-  const [filterOpen, setFilterOpen]         = useState(false);
+const currentUser = JSON.parse(sessionStorage.getItem("user") || "null");
+  const role = currentUser?.role?.toLowerCase();
+  const [filterOpen, setFilterOpen] = useState(false);
   const [selectedFilter, setSelectedFilter] = useState("Today");
-  const [allEntries, setAllEntries]         = useState([]);
-  const [entries, setEntries]               = useState([]);
-  const [openRow, setOpenRow]               = useState(null);
-  const [customStart, setCustomStart]       = useState("");
-  const [customEnd, setCustomEnd]           = useState("");
-  const [showCustom, setShowCustom]         = useState(false);
-  const [perPage, setPerPage]               = useState(10);
-  const [page, setPage]                     = useState(1);
-  const [loading, setLoading]               = useState(false);
-  const intervalRef                         = useRef(null);
+  const [allEntries, setAllEntries] = useState([]);
+  const [entries, setEntries] = useState([]);
+  const [openRow, setOpenRow] = useState(null);
+  const [customStart, setCustomStart] = useState("");
+  const [customEnd, setCustomEnd] = useState("");
+  const [showCustom, setShowCustom] = useState(false);
+  const [perPage, setPerPage] = useState(10);
+  const [page, setPage] = useState(1);
+  const [loading, setLoading] = useState(false);
+  const intervalRef = useRef(null);
 
   const filters = ["Today", "Yesterday", "Last 7 Days", "Last 30 Days", "This Month", "Last Month", "Custom Range"];
 
   // ─────────────────────────────────────────
   // FETCH FROM DB
   // ─────────────────────────────────────────
-  const fetchCampaigns = async () => {
-    const currentUser = JSON.parse(sessionStorage.getItem("user"));
-    if (!currentUser) return;
-    setLoading(true);
-    try {
-      const res  = await fetch(`${BASE}/my-campaigns/?user_id=${currentUser.id}`);
-      const data = await res.json();
-      if (data.status === "success") {
-        setAllEntries(data.campaigns);
-      }
-    } catch (err) {
-      console.error("Fetch error:", err);
+const fetchCampaigns = async () => {
+  if (!currentUser) return;
+
+  setLoading(true);
+
+  try {
+    const res = await fetch(`${BASE}/my-campaigns/?user_id=${currentUser.id}`);
+    const data = await res.json();
+
+    if (data.status === "success") {
+      setAllEntries(data.campaigns);
     }
-    setLoading(false);
-  };
+  } catch (err) {
+    console.error(err);
+  }
+
+  setLoading(false);
+};
 
   // Page load pe fetch karo
   useEffect(() => {
@@ -67,7 +72,7 @@ const WappReports = () => {
   // FILTER LOGIC
   // ─────────────────────────────────────────
   useEffect(() => {
-    const now   = new Date();
+    const now = new Date();
     const IST_OFFSET = 5.5 * 60 * 60 * 1000;
     const todayIST = new Date(Math.floor((now.getTime() + IST_OFFSET) / 86400000) * 86400000 - IST_OFFSET);
 
@@ -75,28 +80,28 @@ const WappReports = () => {
 
     if (selectedFilter === "Today") {
       start = todayIST.getTime();
-      end   = now.getTime();
+      end = now.getTime();
     } else if (selectedFilter === "Yesterday") {
       start = todayIST.getTime() - 86400000;
-      end   = todayIST.getTime() - 1;
+      end = todayIST.getTime() - 1;
     } else if (selectedFilter === "Last 7 Days") {
       start = todayIST.getTime() - 7 * 86400000;
-      end   = now.getTime();
+      end = now.getTime();
     } else if (selectedFilter === "Last 30 Days") {
       start = todayIST.getTime() - 30 * 86400000;
-      end   = now.getTime();
+      end = now.getTime();
     } else if (selectedFilter === "This Month") {
       const istNow = new Date(now.getTime() + IST_OFFSET);
       start = new Date(Date.UTC(istNow.getUTCFullYear(), istNow.getUTCMonth(), 1) - IST_OFFSET).getTime();
-      end   = now.getTime();
+      end = now.getTime();
     } else if (selectedFilter === "Last Month") {
       const istNow = new Date(now.getTime() + IST_OFFSET);
       start = new Date(Date.UTC(istNow.getUTCFullYear(), istNow.getUTCMonth() - 1, 1) - IST_OFFSET).getTime();
-      end   = new Date(Date.UTC(istNow.getUTCFullYear(), istNow.getUTCMonth(), 1) - IST_OFFSET).getTime() - 1;
+      end = new Date(Date.UTC(istNow.getUTCFullYear(), istNow.getUTCMonth(), 1) - IST_OFFSET).getTime() - 1;
     } else if (selectedFilter === "Custom Range") {
       if (!customStart || !customEnd) { setEntries(allEntries); return; }
       start = new Date(customStart).getTime();
-      end   = new Date(customEnd).getTime() + 86399999;
+      end = new Date(customEnd).getTime() + 86399999;
     }
 
     setEntries(allEntries.filter((e) => e.rawDate >= start && e.rawDate <= end));
@@ -106,34 +111,34 @@ const WappReports = () => {
   // ─────────────────────────────────────────
   // DOWNLOAD EXCEL
   // ─────────────────────────────────────────
-const handleDownload = (data) => {
-  const total = data.total || 0;
-  if (total === 0) { alert("No data available."); return; }
+  const handleDownload = (data) => {
+    const total = data.total || 0;
+    if (total === 0) { alert("No data available."); return; }
 
-  let rows = [];
+    let rows = [];
 
-  if (data.numberResults && data.numberResults.length > 0) {
-    // Normal campaign ya completed pending — real results hain
-    rows = data.numberResults.map((r) => ({
-      Number: r.number,
-      Status: r.status.toUpperCase(),
-    }));
-  } else {
-    // Abhi bhi koi data nahi (purana campaign)
-    alert("No number data available for this campaign.");
-    return;
-  }
+    if (data.numberResults && data.numberResults.length > 0) {
+      // Normal campaign ya completed pending — real results hain
+      rows = data.numberResults.map((r) => ({
+        Number: r.number,
+        Status: r.status.toUpperCase(),
+      }));
+    } else {
+      // Abhi bhi koi data nahi (purana campaign)
+      alert("No number data available for this campaign.");
+      return;
+    }
 
-  const ws = XLSX.utils.json_to_sheet(rows);
-  ws["!cols"] = [{ wch: 20 }, { wch: 12 }];
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Campaign Report");
-  XLSX.writeFile(wb, `${data.name || "report"}.xlsx`);
-};
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws["!cols"] = [{ wch: 20 }, { wch: 12 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Campaign Report");
+    XLSX.writeFile(wb, `${data.name || "report"}.xlsx`);
+  };
 
-  const toggleRow    = (i) => setOpenRow(openRow === i ? null : i);
-  const totalPages   = Math.ceil(entries.length / perPage);
-  const paginated    = entries.slice((page - 1) * perPage, page * perPage);
+  const toggleRow = (i) => setOpenRow(openRow === i ? null : i);
+  const totalPages = Math.ceil(entries.length / perPage);
+  const paginated = entries.slice((page - 1) * perPage, page * perPage);
 
   return (
     <div className="min-h-screen bg-[#f1f1f1]">
@@ -159,7 +164,7 @@ const handleDownload = (data) => {
               </button>
               {allEntries.some((e) => e.status === "pending") && (
                 <span className="bg-orange-100 text-orange-600 border border-orange-300 px-3 py-1 rounded text-xs animate-pulse">
-                  ⏳ Pending campaigns auto-refresh kar rahi hain...
+                  ⏳ Your Pending Campaign Auto-Refresh
                 </span>
               )}
             </div>
@@ -254,20 +259,27 @@ const handleDownload = (data) => {
                               </span>
                             ) : (
                               <span className="bg-[#4dbd74] text-white px-2 py-1 text-xs rounded-full">
-                                 COMPLETED
+                                COMPLETED
                               </span>
                             )}
                           </td>
 
                           <td className="px-3 py-2 border-r border-gray-300">{e.date}</td>
                           <td className="px-3 py-2">
-                            {e.status === "completed" ? (
-                              <button onClick={() => handleDownload(e)}
-                                className="bg-[#20A8D8] text-white px-3 py-1 rounded-full text-xs">
+                            {(e.status === "completed" || role === "admin") ? (
+                              <button
+                                onClick={() => handleDownload(e)}
+                                className="bg-[#20A8D8] text-white px-3 py-1 rounded-full text-xs"
+                              >
                                 Download
                               </button>
                             ) : (
-                              <span className="text-gray-400 text-xs">—</span>
+                              <button
+                                disabled
+                                className="bg-gray-300 text-gray-600 px-3 py-1 rounded-full text-xs cursor-not-allowed"
+                              >
+                                Pending
+                              </button>
                             )}
                           </td>
                         </tr>
@@ -305,7 +317,7 @@ const handleDownload = (data) => {
                                 {/* Pending message */}
                                 {e.status === "pending" && (
                                   <div className="mt-3 text-center text-orange-500 text-sm font-medium">
-                                    ⏳ Campaign processing hai — 30 to 45 minutes mein complete hogi
+                                    ⏳Your Campaign Is Processing
                                   </div>
                                 )}
                               </div>

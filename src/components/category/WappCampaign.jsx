@@ -114,7 +114,7 @@ const sendCampaign = async () => {
     if (files.video) formData.append("video", files.video);
     if (files.pdf)   formData.append("pdf",   files.pdf);
 
-    const res  = await fetch(  "https://latestchatway.onrender.com/api/send-whatsapp/", { method: "POST", body: formData });
+    const res  = await fetch(  "https://www.cloudwhatsapp.in/api/send-whatsapp/", { method: "POST", body: formData });
     const data = await res.json();
 
     if (data.status === "error") {

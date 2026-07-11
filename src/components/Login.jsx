@@ -41,7 +41,7 @@ function Login() {
             onSubmit={async (values, { setSubmitting }) => {
 
               try {
-                const res = await fetch("https://latestchatway.onrender.com/api/login/", {
+                const res = await fetch("https://www.cloudwhatsapp.in/api/login/", {
                   method: "POST",
                   headers: {
                     "Content-Type": "application/json",

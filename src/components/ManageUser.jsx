@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { FaKey, FaEdit } from "react-icons/fa";
 import { RiDeleteBinLine } from "react-icons/ri";
 
-const API = "https://latestchatway.onrender.com/api";
+const API = "https://www.cloudwhatsapp.in/api";
 
 export default function ManageUser() {
   const navigate   = useNavigate();
