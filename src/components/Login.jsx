@@ -127,9 +127,16 @@ function Login() {
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="btn w-full mt-2 text-xl py-3"
+                  className="btn btn-premium w-full mt-2 text-xl py-3"
                 >
-                  Login
+                  {isSubmitting ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <span className="spinner" />
+                      Logging in...
+                    </span>
+                  ) : (
+                    "Login"
+                  )}
                 </button>
 
               </form>
@@ -139,7 +146,7 @@ function Login() {
 
       </div>
 
-      {/* SAME CSS */}
+      {/* SAME CSS + PREMIUM BUTTON ADDED */}
       <style>{`
         .input {
           width: 100%;
@@ -166,6 +173,58 @@ function Login() {
         .error {
           color: red;
           font-size: 12px;
+        }
+
+        /* 🔥 PREMIUM BUTTON UPGRADE */
+        .btn-premium {
+          cursor: pointer;
+          position: relative;
+          overflow: hidden;
+          border: none;
+          transition: transform 0.18s cubic-bezier(0.34,1.4,0.64,1),
+                      box-shadow 0.18s ease,
+                      background 0.18s ease;
+          box-shadow: 0 4px 14px rgba(108,192,74,0.35);
+        }
+        .btn-premium:hover:not(:disabled) {
+          transform: translateY(-2px) scale(1.015);
+          box-shadow: 0 8px 22px rgba(108,192,74,0.5);
+        }
+        .btn-premium:active:not(:disabled) {
+          transform: translateY(0) scale(0.98);
+        }
+        .btn-premium:disabled {
+          cursor: not-allowed;
+          opacity: 0.85;
+        }
+        .btn-premium::after {
+          content: "";
+          position: absolute; inset: 0;
+          background: linear-gradient(
+            105deg,
+            transparent 40%,
+            rgba(255,255,255,0.25) 50%,
+            transparent 60%
+          );
+          background-size: 300% 100%;
+          animation: btn-shimmer 2.6s infinite;
+          pointer-events: none;
+        }
+        @keyframes btn-shimmer {
+          0%   { background-position: -300% center; }
+          100% { background-position:  300% center; }
+        }
+
+        .spinner {
+          display: inline-block;
+          width: 15px; height: 15px;
+          border: 2px solid rgba(255,255,255,0.4);
+          border-top-color: #fff;
+          border-radius: 50%;
+          animation: spin 0.65s linear infinite;
+        }
+        @keyframes spin {
+          to { transform: rotate(360deg); }
         }
       `}</style>
 
