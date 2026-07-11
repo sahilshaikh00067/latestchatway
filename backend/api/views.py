@@ -120,6 +120,11 @@ def refund_credit(user_id, amount, description):
         logger.error("refund_credit: user %s not found while refunding %s", user_id, amount)
 
 
+
+@api_view(['GET'])
+def health_check(request):
+    return Response({"status": "ok"})
+
 # ─────────────────────────────────────────
 # LOGIN
 # ─────────────────────────────────────────

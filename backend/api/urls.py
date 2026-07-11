@@ -16,4 +16,5 @@ urlpatterns = [
     path("campaign-results/", views.campaign_results),
     path("my-campaigns/",     views.my_campaigns),      # ← ADD
     path("complete-campaign/", views.complete_campaign), # ← ADD
+    path("health/", views.health_check),
 ]
