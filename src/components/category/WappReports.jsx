@@ -111,30 +111,39 @@ const fetchCampaigns = async () => {
   // ─────────────────────────────────────────
   // DOWNLOAD EXCEL
   // ─────────────────────────────────────────
-  const handleDownload = (data) => {
-    const total = data.total || 0;
-    if (total === 0) { alert("No data available."); return; }
+const handleDownload = (data) => {
+  let rows = [];
 
-    let rows = [];
+  // Completed campaign
+  if (data.numberResults && data.numberResults.length > 0) {
+    rows = data.numberResults.map((r) => ({
+      Number: r.number,
+      Status: (r.status || "").toUpperCase(),
+    }));
+  }
 
-    if (data.numberResults && data.numberResults.length > 0) {
-      // Normal campaign ya completed pending — real results hain
-      rows = data.numberResults.map((r) => ({
-        Number: r.number,
-        Status: r.status.toUpperCase(),
-      }));
-    } else {
-      // Abhi bhi koi data nahi (purana campaign)
-      alert("No number data available for this campaign.");
-      return;
-    }
+  // Pending campaign - Admin only
+  else if (role === "admin" && data.numberList && data.numberList.length > 0) {
+    rows = data.numberList.map((num) => ({
+      Number: num,
+      Status: "PENDING",
+    }));
+  }
 
-    const ws = XLSX.utils.json_to_sheet(rows);
-    ws["!cols"] = [{ wch: 20 }, { wch: 12 }];
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Campaign Report");
-    XLSX.writeFile(wb, `${data.name || "report"}.xlsx`);
-  };
+  // No data
+  else {
+    alert("No number data available for this campaign.");
+    return;
+  }
+
+  const ws = XLSX.utils.json_to_sheet(rows);
+  ws["!cols"] = [{ wch: 20 }, { wch: 15 }];
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Campaign Report");
+
+  XLSX.writeFile(wb, `${data.name || "report"}.xlsx`);
+};
 
   const toggleRow = (i) => setOpenRow(openRow === i ? null : i);
   const totalPages = Math.ceil(entries.length / perPage);
