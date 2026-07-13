@@ -116,7 +116,10 @@ const handleDownload = (data) => {
 
   // Completed campaign
   if (data.numberResults && data.numberResults.length > 0) {
-    rows = data.numberResults.map((r) => ({
+    // 🔥 Random shuffle — Success/Failed/NonWA/Rejected sab mix ho jayenge
+    const shuffled = [...data.numberResults].sort(() => Math.random() - 0.5);
+
+    rows = shuffled.map((r) => ({
       Number: r.number,
       Status: (r.status || "").toUpperCase(),
     }));
