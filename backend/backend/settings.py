@@ -148,6 +148,7 @@ STATIC_ROOT = BASE_DIR / 'staticfiles'
 # =========================
 DATA_UPLOAD_MAX_MEMORY_SIZE = 20 * 1024 * 1024   # 20MB
 FILE_UPLOAD_MAX_MEMORY_SIZE = 20 * 1024 * 1024   # 20MB
+DATA_UPLOAD_MAX_NUMBER_FIELDS = None
 
 # =========================
 # 🔥 REST FRAMEWORK
