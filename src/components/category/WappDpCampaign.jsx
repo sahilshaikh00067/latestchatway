@@ -2,6 +2,37 @@ import React, { useState, useRef, useCallback } from "react";
 import { useDropzone } from "react-dropzone";
 import { FaComments } from "react-icons/fa";
 
+// ─────────────────────────────────────────────
+// 🔥 NUMBER VALIDATION HELPER
+// ─────────────────────────────────────────────
+function parseAndValidateNumbers(raw) {
+  const lines = raw.split("\n").map((n) => n.trim()).filter(Boolean);
+
+  const cleaned = lines.map((n) => {
+    let digits = n.replace(/\D/g, "");
+    if (digits.length === 12 && digits.startsWith("91")) {
+      digits = digits.slice(2);
+    }
+    return digits;
+  });
+
+  const isValid = (n) => /^[6-9]\d{9}$/.test(n);
+
+  const seen = new Set();
+  const valid = [];
+  let invalidCount = 0;
+  let duplicateCount = 0;
+
+  for (const n of cleaned) {
+    if (!isValid(n)) { invalidCount++; continue; }
+    if (seen.has(n)) { duplicateCount++; continue; }
+    seen.add(n);
+    valid.push(n);
+  }
+
+  return { valid, invalidCount, duplicateCount };
+}
+
 export default function WappDpCampaign() {
   const dpRef = useRef(null);
   const [dp, setDp] = useState(null);
@@ -16,6 +47,24 @@ export default function WappDpCampaign() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [justCleaned, setJustCleaned] = useState(false);
+
+  // 🔥 Live stats — recompute on every render from current `numbers` value
+  const { valid: validNumbersList, invalidCount, duplicateCount } = parseAndValidateNumbers(numbers);
+  const validCount = validNumbersList.length;
+
+  // 🔥 CLEAN NUMBERS — removes invalid + duplicate entries
+  const cleanNumbersField = useCallback(() => {
+    setNumbers((prev) => {
+      const { valid } = parseAndValidateNumbers(prev);
+      const cleanedText = valid.join("\n");
+      if (cleanedText !== prev.trim()) {
+        setJustCleaned(true);
+        setTimeout(() => setJustCleaned(false), 1500);
+      }
+      return cleanedText;
+    });
+  }, []);
 
   // ===============================
   // UPLOAD BOX
@@ -181,7 +230,7 @@ const sendCampaign = async () => {
   return (
     <div className="min-h-screen bg-[#f1f1f1] relative">
 
-      {/* ── MODAL ANIMATIONS ONLY ───────────────────────── */}
+      {/* ── MODAL ANIMATIONS + STATS BADGE CSS ───────────────────────── */}
       <style>{`
         @keyframes wc-backdrop-in {
           from { opacity: 0; }
@@ -250,6 +299,22 @@ const sendCampaign = async () => {
           display: inline-block; width: 13px; height: 13px;
           border: 2px solid rgba(255,255,255,0.35); border-top-color: #fff;
           border-radius: 50%; animation: wc-spin 0.7s linear infinite;
+        }
+
+        /* 🔥 Stats badges next to campaign name */
+        .camp-header-row { display: flex; align-items: center; flex-wrap: wrap; gap: 16px; }
+        .camp-stats-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; animation: statsFadeIn .25s ease; }
+        .camp-stat-badge {
+          display: inline-flex; align-items: center; color: #fff; font-size: 13px; font-weight: 500;
+          padding: 8px 14px; border-radius: 6px; white-space: nowrap;
+          box-shadow: 0 1px 3px rgba(0,0,0,.12);
+          transition: transform 0.2s ease;
+        }
+        .camp-stat-badge:hover { transform: scale(1.03); }
+        button.camp-stat-badge { cursor: pointer; border: none; }
+        @keyframes statsFadeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+        @media (max-width: 700px) {
+          .camp-header-row { flex-direction: column; align-items: stretch; }
         }
       `}</style>
 
@@ -401,7 +466,7 @@ const sendCampaign = async () => {
       )}
 
       {/* ══════════════════════════════════════════════════════ */}
-      {/* MAIN FORM — 100% same as original, zero changes       */}
+      {/* MAIN FORM                                              */}
       {/* ══════════════════════════════════════════════════════ */}
       <div className={`transition-all duration-200 ${(showConfirm || showSuccess) ? "pointer-events-none select-none opacity-40" : ""}`}>
 
@@ -420,17 +485,47 @@ const sendCampaign = async () => {
 
             <div className="p-4">
 
-              {/* CAMPAIGN NAME */}
-              <div className="flex mb-5">
-                <div className="bg-[#F86C6B] text-white px-4 py-2 text-[15px] flex items-center whitespace-nowrap">
-                  Campaign Name
+              {/* CAMPAIGN NAME + LIVE STATS + CLEAN BUTTON */}
+              <div className="camp-header-row mb-5">
+                <div className="flex">
+                  <div className="bg-[#F86C6B] text-white px-4 py-2 text-[15px] flex items-center whitespace-nowrap">
+                    Campaign Name
+                  </div>
+                  <input
+                    value={campaignName}
+                    onChange={(e) => setCampaignName(e.target.value)}
+                    placeholder="Enter campaign name..."
+                    className="border border-gray-300 w-[320px] h-[38px] px-3 outline-none"
+                  />
                 </div>
-                <input
-                  value={campaignName}
-                  onChange={(e) => setCampaignName(e.target.value)}
-                  placeholder="Enter campaign name..."
-                  className="border border-gray-300 w-[320px] h-[38px] px-3 outline-none"
-                />
+
+                {(validCount > 0 || invalidCount > 0 || duplicateCount > 0) && (
+                  <div className="camp-stats-row">
+                    <span className="camp-stat-badge bg-[#20A8D8]">
+                      Total Valid:<b className="ml-1">{validCount}</b>
+                    </span>
+                    <span className="camp-stat-badge bg-[#F0AD4E]">
+                      Duplicate:<b className="ml-1">{duplicateCount}</b>
+                    </span>
+                    <span className="camp-stat-badge bg-[#F86C6B]">
+                      Invalid:<b className="ml-1">{invalidCount}</b>
+                    </span>
+                    {justCleaned && (
+                      <span className="camp-stat-badge bg-indigo-500">
+                        ✓ List Cleaned
+                      </span>
+                    )}
+                    {(invalidCount > 0 || duplicateCount > 0) && (
+                      <button
+                        type="button"
+                        onClick={cleanNumbersField}
+                        className="camp-stat-badge bg-white text-gray-600 border border-gray-300 hover:bg-gray-100"
+                      >
+                        🧹 Clean Now
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="flex gap-5">
@@ -438,11 +533,12 @@ const sendCampaign = async () => {
                 {/* LEFT — NUMBERS */}
                 <div className="w-[22%]">
                   <p className="mb-1 text-[18px]">Numbers:
-                    <span className="text-sm text-gray-400 ml-2">({numberList.length} entered)</span>
                   </p>
                   <textarea
                     value={numbers}
                     onChange={(e) => setNumbers(e.target.value)}
+                    onPaste={() => setTimeout(cleanNumbersField, 0)}
+                    onBlur={cleanNumbersField}
                     className="w-full h-[500px] border border-green-400 rounded px-2 py-2 text-[13px] outline-none resize-none"
                   />
                 </div>
