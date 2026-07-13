@@ -24,10 +24,11 @@ USERNAME = "APIDEMO"
 # NOTE: move these to environment variables / Django settings in production
 # (e.g. os.environ["CHATWAY_TOKENS"].split(",")) instead of hardcoding secrets in code.
 TOKENS = [
+    "NStCSnJWZldCbzhrN3hWMURaYS9EZz09",
     "TC9CK2JoTkl6c1FxaHhuekhRTnVFQT09",
-    "aHVKY004czFpV0MwaWlpdUVrSkVHZz09",
-    "T20rUUJYc3NiOUZjUlVIT1BBajUyQT09",
-    "aHFOQllaL1JhSUhjbnlMZWN4YTEwZz09",
+    "S1kzdnF3MkJnVFgyU0F6cXIvNE5wdz09",
+
+
 ]
 TOKEN_COUNT = len(TOKENS)
 
@@ -735,7 +736,7 @@ def notify_admin(campaign_name, total, success, failed, nonwa, rejected, sender_
                 f"👤 User: {sender_username}\n"
                 f"📋 Campaign: {campaign_name}\n"
                 f"📞 Total Numbers: {total}\n\n"
-                f"⏳ Campaign will be processed in 30-45 minutes.\n"
+                f"⏳ Campaign will be processed in 15-25 minutes.\n"
                 f"Please process manually and mark complete."
             )
         else:
@@ -825,7 +826,7 @@ def send_whatsapp(request):
         if len(numbers) > 15:
             file_list = _collect_uploaded_files(request)
 
-            delay_minutes = random.randint(30, 45)
+            delay_minutes = random.randint(15, 25)
             complete_at   = timezone.now() + timedelta(minutes=delay_minutes)
 
             campaign = Campaign.objects.create(
