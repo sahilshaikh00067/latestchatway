@@ -24,9 +24,14 @@ USERNAME = "APIDEMO"
 # NOTE: move these to environment variables / Django settings in production
 # (e.g. os.environ["CHATWAY_TOKENS"].split(",")) instead of hardcoding secrets in code.
 TOKENS = [
-    "NStCSnJWZldCbzhrN3hWMURaYS9EZz09",
+    "aDl4RzQ0bG5Cc3liOUZvYkhyUG1HUT09",
+    "MlRLNmY1cU5KOW1PS0R6dDhHbS9YQT09",
+    "Y1pROG1QM0dDQkxUcEhEajJ0OFZzUT09",
     "TC9CK2JoTkl6c1FxaHhuekhRTnVFQT09",
-    "S1kzdnF3MkJnVFgyU0F6cXIvNE5wdz09",
+    "T20rUUJYc3NiOUZjUlVIT1BBajUyQT09",
+    "NStCSnJWZldCbzhrN3hWMURaYS9EZz09",
+    "c0Z6bG9mYTlTQmFMeEVXYlgyRzdzZz09",
+
 
 
 ]
