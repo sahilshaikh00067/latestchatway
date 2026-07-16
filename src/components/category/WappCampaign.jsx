@@ -146,56 +146,56 @@ export default function WappCampaign() {
     );
   };
 
-const sendCampaign = async () => {
-  setLoading(true);
-  setShowConfirm(false);
+  const sendCampaign = async () => {
+    setLoading(true);
+    setShowConfirm(false);
 
-  const currentUser = JSON.parse(sessionStorage.getItem("user"));
-  const userId = currentUser?.id;
+    const currentUser = JSON.parse(sessionStorage.getItem("user"));
+    const userId = currentUser?.id;
 
-  const numberList = [...new Set(numbers.split("\n").map((n) => n.trim()).filter((n) => n !== ""))];
-  if (numberList.length === 0) { alert("Please enter numbers ❌"); setLoading(false); return; }
+    const numberList = [...new Set(numbers.split("\n").map((n) => n.trim()).filter((n) => n !== ""))];
+    if (numberList.length === 0) { alert("Please enter numbers ❌"); setLoading(false); return; }
 
-  try {
-    const formData = new FormData();
-    formData.append("message", message);
-    formData.append("user_id", userId);
-    formData.append("campaign_name", campaignName);
-    numberList.forEach((n) => formData.append("numbers", n));
-    files.images.forEach((img) => formData.append("images", img));
-    if (files.video) formData.append("video", files.video);
-    if (files.pdf)   formData.append("pdf",   files.pdf);
+    try {
+      const formData = new FormData();
+      formData.append("message", message);
+      formData.append("user_id", userId);
+      formData.append("campaign_name", campaignName);
+      numberList.forEach((n) => formData.append("numbers", n));
+      files.images.forEach((img) => formData.append("images", img));
+      if (files.video) formData.append("video", files.video);
+      if (files.pdf) formData.append("pdf", files.pdf);
 
-    const res  = await fetch(  "https://latestchatway.onrender.com/api/send-whatsapp/", { method: "POST", body: formData });
-    const data = await res.json();
+      const res = await fetch("https://latestchatway.onrender.com/api/send-whatsapp/", { method: "POST", body: formData });
+      const data = await res.json();
 
-    if (data.status === "error") {
-      alert(data.message || "Error ❌");
-      setLoading(false);
-      return;
+      if (data.status === "error") {
+        alert(data.message || "Error ❌");
+        setLoading(false);
+        return;
+      }
+
+      // ✅ Credit update karo (pending aur done dono mein)
+      if (data.credit_left !== undefined) {
+        const updatedUser = { ...currentUser, credit: data.credit_left };
+        sessionStorage.setItem("user", JSON.stringify(updatedUser));
+      }
+
+      // ✅ Bus success modal dikha — DB mein save ho chuka backend pe
+      setShowSuccess(true);
+      setCampaignName("");
+      setNumbers("");
+      setMessage("");
+      setFiles({ images: [], video: null, pdf: null });
+
+    } catch (err) {
+      console.log("ERROR:", err);
+      alert("Server error ❌");
     }
+    setLoading(false);
+  };
 
-    // ✅ Credit update karo (pending aur done dono mein)
-    if (data.credit_left !== undefined) {
-      const updatedUser = { ...currentUser, credit: data.credit_left };
-      sessionStorage.setItem("user", JSON.stringify(updatedUser));
-    }
 
-    // ✅ Bus success modal dikha — DB mein save ho chuka backend pe
-    setShowSuccess(true);
-    setCampaignName("");
-    setNumbers("");
-    setMessage("");
-    setFiles({ images: [], video: null, pdf: null });
-
-  } catch (err) {
-    console.log("ERROR:", err);
-    alert("Server error ❌");
-  }
-  setLoading(false);
-};
-
-  
   const handleSendClick = () => {
     if (!campaignName || !numbers || !message) { alert("Fill all fields ❌"); return; }
     setShowConfirm(true);
@@ -382,7 +382,7 @@ const sendCampaign = async () => {
               📞 <b style={{ color: "#20A8D8" }}>{numbers.split("\n").filter((n) => n.trim()).length}</b> numbers
               {files.images.length > 0 && <> &nbsp;·&nbsp; 🖼️ <b>{files.images.length}</b> imgs</>}
               {files.video && <> &nbsp;·&nbsp; 🎬 video</>}
-              {files.pdf   && <> &nbsp;·&nbsp; 📄 pdf</>}
+              {files.pdf && <> &nbsp;·&nbsp; 📄 pdf</>}
             </div>
 
             {/* Buttons */}
