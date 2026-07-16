@@ -2,20 +2,16 @@ import logging
 import random
 import re
 from datetime import timedelta
-
 from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
-
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 from concurrent.futures import ThreadPoolExecutor
-
 from .models import User, CreditLog, Campaign
-
 logger = logging.getLogger(__name__)
 
 USERNAME = "APIDEMO"
@@ -24,12 +20,12 @@ USERNAME = "APIDEMO"
 # NOTE: move these to environment variables / Django settings in production
 # (e.g. os.environ["CHATWAY_TOKENS"].split(",")) instead of hardcoding secrets in code.
 TOKENS = [
-    "QzBjdWtPWDhYYkg0UGlXNk83dGpUQT09",
-    "cE83aCt6Z0EwV3ZsTVdrdnZQMmRsUT09",
     "bHVjM3VraHg1WlUwMDhCa2pQNHA2QT09",
     "TC9CK2JoTkl6c1FxaHhuekhRTnVFQT09",
     "T20rUUJYc3NiOUZjUlVIT1BBajUyQT09",
     "NVNlOUE3VVFDTUNKTlMvMlpESGxYQT09",
+    "aDl4RzQ0bG5Cc3liOUZvYkhyUG1HUT09",
+
 ]
 TOKEN_COUNT = len(TOKENS)
 
@@ -121,8 +117,7 @@ def refund_credit(user_id, amount, description):
     except User.DoesNotExist:
         logger.error("refund_credit: user %s not found while refunding %s", user_id, amount)
 
-
-
+ 
 @api_view(['GET'])
 def health_check(request):
     return Response({"status": "ok"})
@@ -930,3 +925,4 @@ def send_whatsapp(request):
     except Exception as e:
         logger.exception("send_whatsapp error")
         return Response({"status": "error", "message": str(e)})
+    
