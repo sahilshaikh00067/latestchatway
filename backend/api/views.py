@@ -1,10 +1,15 @@
 import logging
 import random
 import re
+import time
+import uuid
+import csv
+import threading
 from datetime import timedelta
 from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
+from django.http import HttpResponse
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 import requests
@@ -30,43 +35,150 @@ TOKENS = [
 ]
 TOKEN_COUNT = len(TOKENS)
 
+# 🔥 BATCH ROTATION — ek token se BATCH_SIZE_PER_TOKEN messages jayenge,
+# phir agla token use hoga. Isse ek number pe kam load padta hai (ban-risk kam).
+BATCH_SIZE_PER_TOKEN = 3
+
 MAX_WORKERS_TEXT = 20   # per-token concurrency for text-only sends
 MAX_WORKERS_FILE  = 10  # per-token concurrency for sends that include a file
+MAX_WORKERS_UPLOAD = 6  # concurrency for parallel file uploads (images/video/pdf)
+
+TEXT_POOL_SIZE = TOKEN_COUNT * MAX_WORKERS_TEXT   # 140
+FILE_POOL_SIZE = TOKEN_COUNT * MAX_WORKERS_FILE   # 70
+
+NUMBER_RE = re.compile(r"91\d{10}")
 
 # ─────────────────────────────────────────
 # 🔥 SHARED HTTP SESSION — connection pooling = much faster bulk sends
-# (avoids a fresh TCP/TLS handshake on every single message)
 # ─────────────────────────────────────────
 _session = requests.Session()
 _retry_policy = Retry(
     total=1,
     connect=1,
-    read=1,
-    backoff_factor=0.2,
+    read=0,
+    backoff_factor=0.15,
     status_forcelist=[500, 502, 503, 504],
 )
-_adapter = HTTPAdapter(pool_connections=200, pool_maxsize=200, max_retries=_retry_policy)
+_adapter = HTTPAdapter(
+    pool_connections=20,
+    pool_maxsize=TEXT_POOL_SIZE + FILE_POOL_SIZE,
+    max_retries=_retry_policy,
+    pool_block=False,
+)
 _session.mount("https://", _adapter)
 _session.mount("http://", _adapter)
 
+# ─────────────────────────────────────────
+# 🔥 PERSISTENT GLOBAL THREAD POOLS
+# ─────────────────────────────────────────
+TEXT_EXECUTOR = ThreadPoolExecutor(max_workers=TEXT_POOL_SIZE, thread_name_prefix="wapp-text")
+FILE_EXECUTOR = ThreadPoolExecutor(max_workers=FILE_POOL_SIZE, thread_name_prefix="wapp-file")
+UPLOAD_EXECUTOR = ThreadPoolExecutor(max_workers=MAX_WORKERS_UPLOAD, thread_name_prefix="wapp-upload")
+
+TEXT_TIMEOUT = (3, 5)    # (connect, read)
+FILE_TIMEOUT = (3, 8)
+ADMIN_TIMEOUT = (3, 4)
+
+
+def batch_token_index(position):
+    """🔥 3-per-token batching: position 0,1,2 → token0 | 3,4,5 → token1 | ..."""
+    return (position // BATCH_SIZE_PER_TOKEN) % TOKEN_COUNT
+
 
 # ═════════════════════════════════════════════════════════════════════════
-# 🔒 CREDIT HELPERS — every credit mutation goes through these so there is
-# exactly ONE place that can ever change a user's balance. Each helper
-# locks the user row (select_for_update) inside a short atomic transaction,
-# so concurrent requests can never race each other into over-spending or
-# double-deducting credit.
+# 🩺 TOKEN HEALTH / CIRCUIT BREAKER
+# A token that keeps failing gets put on cooldown so future sends skip
+# straight to a healthy token instead of wasting a timeout on it.
+# ═════════════════════════════════════════════════════════════════════════
+TOKEN_FAIL_THRESHOLD  = 3
+TOKEN_COOLDOWN_SECONDS = 60
+
+_token_health_lock    = threading.Lock()
+_token_fail_count     = {i: 0 for i in range(TOKEN_COUNT)}
+_token_cooldown_until = {i: 0 for i in range(TOKEN_COUNT)}
+
+
+def _mark_token_result(idx, ok):
+    with _token_health_lock:
+        if ok:
+            _token_fail_count[idx] = 0
+            _token_cooldown_until[idx] = 0
+        else:
+            _token_fail_count[idx] = _token_fail_count.get(idx, 0) + 1
+            if _token_fail_count[idx] >= TOKEN_FAIL_THRESHOLD:
+                _token_cooldown_until[idx] = time.time() + TOKEN_COOLDOWN_SECONDS
+
+
+def _token_order(token_index):
+    """Healthy tokens first (rotated from token_index), cooling-down tokens last."""
+    now = time.time()
+    with _token_health_lock:
+        healthy = [i for i in range(TOKEN_COUNT) if _token_cooldown_until.get(i, 0) <= now]
+        cooling = [i for i in range(TOKEN_COUNT) if _token_cooldown_until.get(i, 0) > now]
+    if not healthy:
+        healthy, cooling = list(range(TOKEN_COUNT)), []
+    start = token_index % len(healthy)
+    return healthy[start:] + healthy[:start] + cooling
+
+
+# ═════════════════════════════════════════════════════════════════════════
+# 📊 LIVE PROGRESS TRACKER
+# ═════════════════════════════════════════════════════════════════════════
+_progress_lock  = threading.Lock()
+_progress_store = {}
+
+
+def _init_progress(job_id, total):
+    with _progress_lock:
+        _progress_store[job_id] = {
+            "total": total, "done": 0,
+            "success": 0, "failed": 0, "nonwa": 0, "rejected": 0,
+        }
+
+
+def _bump_progress(job_id, status):
+    if not job_id:
+        return
+    with _progress_lock:
+        p = _progress_store.get(job_id)
+        if p is None:
+            return
+        p["done"] += 1
+        p[status] = p.get(status, 0) + 1
+
+
+def _clear_progress(job_id):
+    with _progress_lock:
+        _progress_store.pop(job_id, None)
+
+
+@api_view(['GET'])
+def campaign_progress(request):
+    job_id = request.query_params.get("job_id")
+    with _progress_lock:
+        p = _progress_store.get(job_id)
+    if not p:
+        return Response({"status": "failed", "message": "No active job (finished already or invalid id)"})
+    return Response({"status": "success", **p})
+
+
+def _personalize(message, number):
+    if not message:
+        return message
+    return message.replace("{number}", number)
+
+
+# ═════════════════════════════════════════════════════════════════════════
+# 🔒 CREDIT HELPERS
 # ═════════════════════════════════════════════════════════════════════════
 
 def reserve_credit(user_id, amount, description):
     """
-    Locks the user row and atomically deducts `amount` credits up-front,
-    after verifying the user actually has enough. Returns:
-        (ok: bool, error_message: str|None, credit_left, user)
+    Locks the user row and atomically deducts `amount` credits up-front.
     Admins are unlimited and always pass without being charged.
-    This is called BEFORE any slow network/sending work starts, and the
-    lock is held only for the duration of this tiny transaction — never
-    during the actual WhatsApp sending, which can take minutes.
+    Policy: this deduction is FINAL — success, failed, nonwa, or rejected,
+    the credit is never refunded (see refund_credit below, kept only for
+    the cancel-before-send case where nothing was ever attempted).
     """
     try:
         with transaction.atomic():
@@ -96,10 +208,9 @@ def reserve_credit(user_id, amount, description):
 
 def refund_credit(user_id, amount, description):
     """
-    Locks the user row and atomically refunds `amount` credits back
-    (e.g. for numbers that ended up failed/non-WA/rejected after a
-    reservation was already made). Admins are skipped since they were
-    never charged in the first place. Safe to call with amount <= 0 (no-op).
+    Only used for CANCEL of a still-pending campaign (no send attempted
+    at all). NOT used anywhere in the actual send/complete flow anymore —
+    success, failed, nonwa, rejected are all final deductions, no refund.
     """
     if amount is None or amount <= 0:
         return
@@ -118,7 +229,7 @@ def refund_credit(user_id, amount, description):
     except User.DoesNotExist:
         logger.error("refund_credit: user %s not found while refunding %s", user_id, amount)
 
- 
+
 @api_view(['GET'])
 def health_check(request):
     return Response({"status": "ok"})
@@ -231,11 +342,34 @@ def campaign_results(request):
 
 
 # ─────────────────────────────────────────
+# 📄 CAMPAIGN RESULTS — CSV EXPORT
+# ─────────────────────────────────────────
+@api_view(['GET'])
+def campaign_results_csv(request):
+    try:
+        campaign_id = request.query_params.get("campaign_id")
+        campaign = Campaign.objects.get(id=campaign_id)
+
+        response = HttpResponse(content_type="text/csv")
+        response["Content-Disposition"] = f'attachment; filename="campaign_{campaign_id}_results.csv"'
+        writer = csv.writer(response)
+        writer.writerow(["Number", "Status"])
+        for row in (campaign.results or []):
+            writer.writerow([row.get("number", ""), row.get("status", "")])
+        return response
+
+    except Campaign.DoesNotExist:
+        return Response({"status": "failed", "message": "Campaign not found"})
+    except Exception as e:
+        logger.exception("campaign_results_csv error")
+        return Response({"status": "error", "message": str(e)})
+
+
+# ─────────────────────────────────────────
 # MY CAMPAIGNS LIST
 # ─────────────────────────────────────────
 @api_view(['GET'])
 def my_campaigns(request):
-    # Pehle pending campaigns auto-complete karo
     auto_complete_pending_campaigns()
 
     try:
@@ -275,15 +409,11 @@ def my_campaigns(request):
 
 # ─────────────────────────────────────────
 # CAMPAIGN COMPLETION — shared by the auto-completer and the manual
-# "complete now" admin action, so there is one source of truth.
+# "complete now" admin action.
+# Policy: NO REFUNDS. Full amount was already reserved when the campaign
+# was created — success or fail, it stays deducted.
 # ─────────────────────────────────────────
 def _simulate_and_close_campaign(campaign):
-    """
-    Randomly simulates delivery outcomes for a pending campaign and closes
-    it out. Credit for this campaign's numbers was already fully reserved
-    when the campaign was created, so here we only REFUND the portion that
-    didn't end up "success" — we never re-deduct.
-    """
     success_pct       = random.uniform(0.80, 0.90)
     simulated_success = int(campaign.total * success_pct)
     simulated_failed  = campaign.total - simulated_success
@@ -302,12 +432,7 @@ def _simulate_and_close_campaign(campaign):
     campaign.results = number_results
     campaign.save(update_fields=["status", "success", "failed", "results"])
 
-    # Refund the credits reserved for numbers that did NOT succeed.
-    refund_credit(
-        campaign.user_id,
-        simulated_failed,
-        f"Campaign '{campaign.campaign_name}' completed — refund for {simulated_failed} non-success",
-    )
+    # 🚫 No refund — credit already reserved in full, stays deducted regardless of outcome.
 
     return simulated_success, simulated_failed
 
@@ -352,6 +477,38 @@ def complete_campaign(request):
 
 
 # ─────────────────────────────────────────
+# ❌ CANCEL PENDING CAMPAIGN
+# (Refund kept HERE ONLY — nothing was ever sent/attempted for a still-
+# queued campaign, so this is not a "result refund", it's an un-charge
+# for numbers that never left the queue. Tell me if you want this
+# removed too and I'll make cancellation non-refundable as well.)
+# ─────────────────────────────────────────
+@api_view(['POST'])
+def cancel_campaign(request):
+    try:
+        campaign_id = request.data.get("campaign_id")
+        campaign = Campaign.objects.get(id=campaign_id)
+
+        if campaign.status != "pending":
+            return Response({"status": "failed", "message": "Only pending campaigns can be cancelled"})
+
+        refund_credit(
+            campaign.user_id, campaign.total,
+            f"Campaign '{campaign.campaign_name}' cancelled — full refund of {campaign.total}"
+        )
+        campaign.status = "cancelled"
+        campaign.save(update_fields=["status"])
+
+        return Response({"status": "success", "message": "Campaign cancelled and credits refunded"})
+
+    except Campaign.DoesNotExist:
+        return Response({"status": "failed", "message": "Campaign not found"})
+    except Exception as e:
+        logger.exception("cancel_campaign error")
+        return Response({"status": "error", "message": str(e)})
+
+
+# ─────────────────────────────────────────
 # ADD CREDIT
 # ─────────────────────────────────────────
 @api_view(['POST'])
@@ -365,8 +522,6 @@ def add_credit(request):
             return Response({"status": "failed", "message": "Amount must be > 0"})
 
         with transaction.atomic():
-            # Consistent lock ordering (lower id first) avoids deadlocks
-            # when two transfers between the same pair of users run at once.
             first_id, second_id = sorted([int(from_id), int(to_id)])
             locked = {u.id: u for u in User.objects.select_for_update().filter(id__in=[first_id, second_id])}
             from_user = locked.get(int(from_id))
@@ -604,7 +759,7 @@ def upload_to_chatway(file, token):
         file.seek(0)
         url   = f"https://int.chatway.in/api/file-upload?username={USERNAME}&token={token}"
         files = {"file": (file.name, file.read(), file.content_type or "application/octet-stream")}
-        res   = _session.post(url, files=files, timeout=30)
+        res   = _session.post(url, files=files, timeout=FILE_TIMEOUT)
         data  = res.json()
         if data.get("status") == "success":
             file_url = data.get("url") or data.get("file_url") or data.get("link")
@@ -620,7 +775,7 @@ def upload_to_catbox(file):
         file.seek(0)
         files = {"fileToUpload": (file.name, file.read(), file.content_type or "application/octet-stream")}
         res   = _session.post("https://catbox.moe/user/api.php",
-                               files=files, data={"reqtype": "fileupload", "userhash": ""}, timeout=30)
+                               files=files, data={"reqtype": "fileupload", "userhash": ""}, timeout=FILE_TIMEOUT)
         if res.status_code == 200 and res.text.startswith("https://"):
             return res.text.strip(), file.name
         return None, None
@@ -637,47 +792,52 @@ def upload_file(file):
 
 
 # ─────────────────────────────────────────
-# 🔥 SEND HELPERS — TOKEN_COUNT ke hisaab se rotate, shared session = fast
+# 🔥 SEND HELPERS
 # ─────────────────────────────────────────
 def _normalize_number(number):
     number = number.strip()
     if not number.startswith("91"):
         number = "91" + number
-    if not re.fullmatch(r"91\d{10}", number):
-        return None
-    return number
+    return number if NUMBER_RE.fullmatch(number) else None
 
 
-def _token_order(token_index):
-    order = [token_index % TOKEN_COUNT]
-    for i in range(TOKEN_COUNT):
-        if i not in order:
-            order.append(i)
-    return order
+def _finish(job_id, status):
+    _bump_progress(job_id, status)
+    return {"status": status}
 
 
 def send_single_text(args):
-    number, message, token_index = args
-    number = _normalize_number(number)
-    if not number:
-        return {"status": "failed"}
+    number, message, token_index, job_id = args
+    norm = _normalize_number(number)
+    if not norm:
+        return _finish(job_id, "failed")
+
+    text = _personalize(message, norm)
 
     for idx in _token_order(token_index):
         try:
             url = (
                 f"https://int.chatway.in/api/send-msg"
-                f"?username={USERNAME}&number={number}"
-                f"&message={requests.utils.quote(message)}"
+                f"?username={USERNAME}&number={norm}"
+                f"&message={requests.utils.quote(text)}"
                 f"&token={TOKENS[idx]}"
             )
-            res = _session.get(url, timeout=8)
+            res = _session.get(url, timeout=TEXT_TIMEOUT)
             txt = res.text.lower()
-            if "not exist" in txt:                     return {"status": "nonwa"}
-            if "reject" in txt:                         return {"status": "rejected"}
-            if "success" in txt or "accepted" in txt:   return {"status": "success"}
+            if "not exist" in txt:
+                _mark_token_result(idx, True)
+                return _finish(job_id, "nonwa")
+            if "reject" in txt:
+                _mark_token_result(idx, True)
+                return _finish(job_id, "rejected")
+            if "success" in txt or "accepted" in txt:
+                _mark_token_result(idx, True)
+                return _finish(job_id, "success")
+            _mark_token_result(idx, False)
         except Exception:
+            _mark_token_result(idx, False)
             continue
-    return {"status": "failed"}
+    return _finish(job_id, "failed")
 
 
 def send_single_file(args):
@@ -696,29 +856,40 @@ def send_single_file(args):
                 f"&file_url={requests.utils.quote(file_url, safe='')}"
                 f"&file_name={requests.utils.quote(file_name, safe='')}"
             )
-            res = _session.get(url, timeout=12)
+            res = _session.get(url, timeout=FILE_TIMEOUT)
             txt = res.text.lower()
-            if "not exist" in txt:                     return {"status": "nonwa"}
-            if "reject" in txt:                         return {"status": "rejected"}
-            if "success" in txt or "accepted" in txt:   return {"status": "success"}
+            if "not exist" in txt:
+                _mark_token_result(idx, True)
+                return {"status": "nonwa"}
+            if "reject" in txt:
+                _mark_token_result(idx, True)
+                return {"status": "rejected"}
+            if "success" in txt or "accepted" in txt:
+                _mark_token_result(idx, True)
+                return {"status": "success"}
+            _mark_token_result(idx, False)
         except Exception:
+            _mark_token_result(idx, False)
             continue
     return {"status": "failed"}
 
 
 def send_all_files_to_number(args):
-    number, message, file_list, token_index = args
+    number, message, file_list, token_index, job_id = args
     results = []
     if message:
-        results.append(send_single_text((number, message, token_index)))
+        results.append(send_single_text((number, message, token_index, None)))
     for i, (file_url, file_name) in enumerate(file_list):
         results.append(send_single_file((number, "", file_url, file_name, (token_index + i) % TOKEN_COUNT)))
 
     statuses = [r["status"] for r in results]
-    if "success"  in statuses: return {"status": "success"}
-    if "nonwa"    in statuses: return {"status": "nonwa"}
-    if "rejected" in statuses: return {"status": "rejected"}
-    return {"status": "failed"}
+    if "success" in statuses:    final = "success"
+    elif "nonwa" in statuses:    final = "nonwa"
+    elif "rejected" in statuses: final = "rejected"
+    else:                        final = "failed"
+
+    _bump_progress(job_id, final)
+    return {"status": final}
 
 
 # ─────────────────────────────────────────
@@ -747,40 +918,48 @@ def notify_admin(campaign_name, total, success, failed, nonwa, rejected, sender_
                 f"📵 NonWA: {nonwa}\n"
                 f"🚫 Rejected: {rejected}"
             )
-        for token in TOKENS:
-            try:
-                url = (
-                    f"https://int.chatway.in/api/send-msg"
-                    f"?username={USERNAME}&number={admin_number}"
-                    f"&message={requests.utils.quote(message)}&token={token}"
-                )
-                res = _session.get(url, timeout=5)
-                if "success" in res.text.lower() or "accepted" in res.text.lower():
-                    break
-            except Exception:
-                continue
+
+        def _notify():
+            for token in TOKENS:
+                try:
+                    url = (
+                        f"https://int.chatway.in/api/send-msg"
+                        f"?username={USERNAME}&number={admin_number}"
+                        f"&message={requests.utils.quote(message)}&token={token}"
+                    )
+                    res = _session.get(url, timeout=ADMIN_TIMEOUT)
+                    if "success" in res.text.lower() or "accepted" in res.text.lower():
+                        break
+                except Exception:
+                    continue
+        UPLOAD_EXECUTOR.submit(_notify)
     except Exception as e:
         logger.error("notify_admin error: %s", e)
 
 
 def _collect_uploaded_files(request):
-    image_files = request.FILES.getlist("images")
+    image_files = request.FILES.getlist("images")[:4]
     video_file  = request.FILES.get("video")
     pdf_file    = request.FILES.get("pdf")
 
-    file_list = []
-    for img in image_files[:4]:
-        url, name = upload_file(img)
-        if url:
-            file_list.append((url, name))
+    all_files = list(image_files)
     if video_file:
-        url, name = upload_file(video_file)
-        if url:
-            file_list.append((url, name))
+        all_files.append(video_file)
     if pdf_file:
-        url, name = upload_file(pdf_file)
-        if url:
-            file_list.append((url, name))
+        all_files.append(pdf_file)
+
+    if not all_files:
+        return []
+
+    futures = [UPLOAD_EXECUTOR.submit(upload_file, f) for f in all_files]
+    file_list = []
+    for fut in futures:
+        try:
+            url, name = fut.result()
+            if url:
+                file_list.append((url, name))
+        except Exception as e:
+            logger.error("parallel upload error: %s", e)
     return file_list
 
 
@@ -807,12 +986,11 @@ def send_whatsapp(request):
         campaign_name = request.data.get("campaign_name", "N/A")
 
         # 🔒 Reserve credit for the FULL number count up-front, atomically.
-        # This is the fix that makes credit deduction bullet-proof: no two
-        # requests (or a pending + an immediate send) can ever both pass
-        # the check and overspend the same balance.
+        # This deduction is FINAL — no refund happens later, regardless of
+        # success/failed/nonwa/rejected outcome.
         ok, err, credit_left, user = reserve_credit(
             user_id, len(numbers),
-            f"Campaign '{campaign_name}' — {len(numbers)} numbers reserved"
+            f"Campaign '{campaign_name}' — {len(numbers)} numbers charged"
         )
         if not ok:
             return Response({"status": "error", "message": err})
@@ -854,19 +1032,35 @@ def send_whatsapp(request):
             })
 
         # ─────────────────────────────────────────
-        # ≤15 NUMBERS = NORMAL SEND (credit already reserved above)
+        # ≤15 NUMBERS = NORMAL SEND
+        # 🔥 3-per-token batching: numbers[0..2] → token0, [3..5] → token1, ...
         # ─────────────────────────────────────────
         file_list = _collect_uploaded_files(request)
-        worker_cap = max(len(numbers), 1)
+
+        job_id = str(uuid.uuid4())
+        _init_progress(job_id, len(numbers))
 
         if file_list:
-            tasks = [(num, message, file_list, i % TOKEN_COUNT) for i, num in enumerate(numbers)]
-            with ThreadPoolExecutor(max_workers=min(worker_cap, TOKEN_COUNT * MAX_WORKERS_FILE)) as executor:
-                results = list(executor.map(send_all_files_to_number, tasks))
+            tasks = [(num, message, file_list, batch_token_index(i), job_id) for i, num in enumerate(numbers)]
+            results = list(FILE_EXECUTOR.map(send_all_files_to_number, tasks))
         else:
-            tasks = [(num, message, i % TOKEN_COUNT) for i, num in enumerate(numbers)]
-            with ThreadPoolExecutor(max_workers=min(worker_cap, TOKEN_COUNT * MAX_WORKERS_TEXT)) as executor:
-                results = list(executor.map(send_single_text, tasks))
+            tasks = [(num, message, batch_token_index(i), job_id) for i, num in enumerate(numbers)]
+            results = list(TEXT_EXECUTOR.map(send_single_text, tasks))
+
+        # 🔁 Auto-retry ONCE for genuine failures (token/network issues) with a
+        # shifted token order. nonwa/rejected are terminal and NOT retried.
+        failed_indices = [i for i, r in enumerate(results) if r["status"] == "failed"]
+        if failed_indices:
+            if file_list:
+                retry_tasks = [(numbers[i], message, file_list, (batch_token_index(i) + 3) % TOKEN_COUNT, None) for i in failed_indices]
+                retry_results = list(FILE_EXECUTOR.map(send_all_files_to_number, retry_tasks))
+            else:
+                retry_tasks = [(numbers[i], message, (batch_token_index(i) + 3) % TOKEN_COUNT, None) for i in failed_indices]
+                retry_results = list(TEXT_EXECUTOR.map(send_single_text, retry_tasks))
+            for idx, rr in zip(failed_indices, retry_results):
+                results[idx] = rr
+
+        _clear_progress(job_id)
 
         success = failed = nonwa = rejected = 0
         for r in results:
@@ -891,18 +1085,13 @@ def send_whatsapp(request):
             file_urls=[],
         )
 
-        # Refund credit reserved for numbers that did NOT succeed
-        # (nonwa + rejected + failed) — only actual "success" stays charged.
-        not_success = len(numbers) - success
-        refund_credit(
-            user_id, not_success,
-            f"Campaign '{campaign_name}' — refund for {not_success} non-success (nonwa/rejected/failed)"
-        )
-        final_credit_left = "unlimited" if user.is_admin() else (user.credit + not_success if not user.is_admin() else "unlimited")
-        # (recompute a fresh accurate value instead of guessing)
+        # 🚫 NO REFUND — full amount reserved above stays deducted no matter
+        # what the outcome was (success / failed / nonwa / rejected).
         if not user.is_admin():
             user.refresh_from_db(fields=["credit"])
             final_credit_left = user.credit
+        else:
+            final_credit_left = "unlimited"
 
         if len(numbers) > 5:
             try:
@@ -926,4 +1115,3 @@ def send_whatsapp(request):
     except Exception as e:
         logger.exception("send_whatsapp error")
         return Response({"status": "error", "message": str(e)})
-    

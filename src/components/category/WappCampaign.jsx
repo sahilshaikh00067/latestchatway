@@ -33,6 +33,16 @@ function parseAndValidateNumbers(raw) {
   return { valid, invalidCount, duplicateCount };
 }
 
+// ─────────────────────────────────────────────
+// 🔥 TOAST CONFIG
+// ─────────────────────────────────────────────
+const TOAST_STYLES = {
+  error:   { icon: "✕", accent: "#F86C6B", bg: "linear-gradient(135deg, #fff5f5, #ffffff)", ring: "#F86C6B33" },
+  warning: { icon: "⚠", accent: "#F0AD4E", bg: "linear-gradient(135deg, #fffaf0, #ffffff)", ring: "#F0AD4E33" },
+  success: { icon: "✓", accent: "#4DBD74", bg: "linear-gradient(135deg, #f3fdf7, #ffffff)", ring: "#4DBD7433" },
+  info:    { icon: "ℹ", accent: "#20A8D8", bg: "linear-gradient(135deg, #f0f9fd, #ffffff)", ring: "#20A8D833" },
+};
+
 export default function WappCampaign() {
   const [campaignName, setCampaignName] = useState("");
   const [numbers, setNumbers] = useState("");
@@ -42,6 +52,18 @@ export default function WappCampaign() {
   const [loading, setLoading] = useState(false);
   const [files, setFiles] = useState({ images: [], video: null, pdf: null });
   const [justCleaned, setJustCleaned] = useState(false);
+  const [toasts, setToasts] = useState([]);
+
+  // 🔔 Premium toast — replaces alert()
+  const showToast = useCallback((message, type = "error") => {
+    const id = Date.now() + Math.random();
+    setToasts((prev) => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 3800);
+  }, []);
+
+  const dismissToast = (id) => setToasts((prev) => prev.filter((t) => t.id !== id));
 
   // 🔥 Live stats — recompute on every render from current `numbers` value
   const { valid: validNumbersList, invalidCount, duplicateCount } = parseAndValidateNumbers(numbers);
@@ -49,7 +71,6 @@ export default function WappCampaign() {
 
   // ─────────────────────────────────────────────
   // 🔥 CLEAN NUMBERS — removes invalid + duplicate entries
-  // Rewrites textarea to contain ONLY valid, unique 10-digit numbers.
   // ─────────────────────────────────────────────
   const cleanNumbersField = useCallback(() => {
     setNumbers((prev) => {
@@ -66,14 +87,14 @@ export default function WappCampaign() {
   const handleDrop = (acceptedFiles, type) => {
     if (type === "image") {
       const validImages = acceptedFiles.filter((f) => f.size <= 1 * 1024 * 1024);
-      if (validImages.length !== acceptedFiles.length) alert("❌ Each image must be under 1MB");
+      if (validImages.length !== acceptedFiles.length) showToast("Each image must be under 1MB", "warning");
       setFiles((prev) => ({ ...prev, images: [...prev.images, ...validImages].slice(0, 4) }));
       return;
     }
     const file = acceptedFiles[0];
     if (!file) return;
     const limits = { video: 3, pdf: 1 };
-    if (file.size > limits[type] * 1024 * 1024) { alert(`❌ ${type} must be under ${limits[type]}MB`); return; }
+    if (file.size > limits[type] * 1024 * 1024) { showToast(`${type[0].toUpperCase() + type.slice(1)} must be under ${limits[type]}MB`, "warning"); return; }
     setFiles((prev) => ({ ...prev, [type]: file }));
   };
 
@@ -96,15 +117,15 @@ export default function WappCampaign() {
     const hasFile = type === "image" ? files.images.length > 0 : !!file;
 
     return (
-      <div className="border border-gray-300 rounded overflow-hidden">
+      <div className="border border-gray-300 rounded overflow-hidden transition-shadow duration-200 hover:shadow-sm">
         <div className={`${color} text-white px-4 py-2 text-[13px] font-semibold flex justify-between items-center`}>
           <span>{title}</span>
           {hasFile && (
             <button onClick={(e) => { e.stopPropagation(); removeFile(type); }}
-              className="text-white text-xs bg-black bg-opacity-30 px-2 py-0.5 rounded">✕ Remove</button>
+              className="text-white text-xs bg-black bg-opacity-30 hover:bg-opacity-45 px-2 py-0.5 rounded transition-colors duration-150">✕ Remove</button>
           )}
         </div>
-        <div {...getRootProps()} className={`text-center py-1 text-[13px] cursor-pointer transition ${isDragActive ? "bg-blue-50" : "bg-gray-100 hover:bg-gray-200"}`}>
+        <div {...getRootProps()} className={`text-center py-1 text-[13px] cursor-pointer transition-colors duration-200 ${isDragActive ? "bg-blue-50" : "bg-gray-100 hover:bg-gray-200"}`}>
           <input {...getInputProps()} />
           {hasFile ? (
             <div className="flex flex-col items-center gap-2 px-3">
@@ -112,7 +133,7 @@ export default function WappCampaign() {
                 <>
                   <div className="flex flex-wrap gap-2 justify-center">
                     {files.images.map((img, index) => (
-                      <img key={index} src={URL.createObjectURL(img)} alt="preview" className="w-[70px] h-[70px] object-cover rounded border" />
+                      <img key={index} src={URL.createObjectURL(img)} alt="preview" className="w-[70px] h-[70px] object-cover rounded border transition-transform duration-200 hover:scale-105" />
                     ))}
                   </div>
                   <span className="text-green-600 font-semibold text-[12px]">✅ {files.images.length} Images Selected</span>
@@ -154,7 +175,7 @@ export default function WappCampaign() {
     const userId = currentUser?.id;
 
     const numberList = [...new Set(numbers.split("\n").map((n) => n.trim()).filter((n) => n !== ""))];
-    if (numberList.length === 0) { alert("Please enter numbers ❌"); setLoading(false); return; }
+    if (numberList.length === 0) { showToast("Please enter numbers", "error"); setLoading(false); return; }
 
     try {
       const formData = new FormData();
@@ -170,7 +191,7 @@ export default function WappCampaign() {
       const data = await res.json();
 
       if (data.status === "error") {
-        alert(data.message || "Error ❌");
+        showToast(data.message || "Something went wrong", "error");
         setLoading(false);
         return;
       }
@@ -190,21 +211,20 @@ export default function WappCampaign() {
 
     } catch (err) {
       console.log("ERROR:", err);
-      alert("Server error ❌");
+      showToast("Server error — please try again", "error");
     }
     setLoading(false);
   };
 
-
   const handleSendClick = () => {
-    if (!campaignName || !numbers || !message) { alert("Fill all fields ❌"); return; }
+    if (!campaignName || !numbers || !message) { showToast("Please fill all fields", "warning"); return; }
     setShowConfirm(true);
   };
 
   return (
     <div className="min-h-screen bg-[#f1f1f1] relative">
 
-      {/* ── ONLY MODAL CSS ADDED HERE ───────────────────────── */}
+      {/* ── MODAL + TOAST CSS ───────────────────────── */}
       <style>{`
         @keyframes wc-backdrop-in {
           from { opacity: 0; }
@@ -322,7 +342,86 @@ export default function WappCampaign() {
         @media (max-width: 700px) {
           .camp-header-row { flex-direction: column; align-items: stretch; }
         }
+
+        /* Smoother input focus glow */
+        .wc-input, .wc-textarea {
+          transition: border-color 0.18s ease, box-shadow 0.18s ease;
+        }
+        .wc-input:focus, .wc-textarea:focus {
+          border-color: #20A8D8 !important;
+          box-shadow: 0 0 0 3px #20A8D822;
+          outline: none;
+        }
+
+        /* ═════════════════════════════ TOASTS ═════════════════════════════ */
+        @keyframes toast-in {
+          from { opacity: 0; transform: translateX(60px) scale(0.95); }
+          to   { opacity: 1; transform: translateX(0)     scale(1);   }
+        }
+        @keyframes toast-out {
+          from { opacity: 1; transform: translateX(0)   scale(1);    }
+          to   { opacity: 0; transform: translateX(60px) scale(0.95); }
+        }
+        @keyframes toast-shrink {
+          from { width: 100%; }
+          to   { width: 0%; }
+        }
+        .wc-toast {
+          animation: toast-in 0.32s cubic-bezier(0.34, 1.3, 0.64, 1) forwards;
+        }
+        .wc-toast-bar {
+          animation: toast-shrink 3.8s linear forwards;
+        }
       `}</style>
+
+      {/* ══════════════════════════════════════════ */}
+      {/* 🔔 TOAST STACK                             */}
+      {/* ══════════════════════════════════════════ */}
+      <div className="fixed top-5 right-5 z-[70] flex flex-col gap-2.5 w-[320px] max-w-[90vw]">
+        {toasts.map((t) => {
+          const style = TOAST_STYLES[t.type] || TOAST_STYLES.error;
+          return (
+            <div
+              key={t.id}
+              className="wc-toast"
+              style={{
+                background: style.bg,
+                border: `1px solid ${style.accent}33`,
+                borderLeft: `4px solid ${style.accent}`,
+                borderRadius: 12,
+                boxShadow: `0 10px 30px rgba(0,0,0,0.12), 0 0 0 4px ${style.ring}`,
+                padding: "12px 14px",
+                display: "flex",
+                alignItems: "flex-start",
+                gap: 10,
+                position: "relative",
+                overflow: "hidden",
+              }}
+            >
+              <div style={{
+                width: 22, height: 22, borderRadius: "50%",
+                background: style.accent, color: "#fff",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: 12, fontWeight: 800, flexShrink: 0, marginTop: 1,
+              }}>{style.icon}</div>
+              <div style={{ flex: 1, fontSize: 13, color: "#2b3948", lineHeight: 1.4, fontWeight: 500 }}>
+                {t.message}
+              </div>
+              <button
+                onClick={() => dismissToast(t.id)}
+                style={{
+                  background: "transparent", border: "none", cursor: "pointer",
+                  color: "#9aa5b1", fontSize: 15, lineHeight: 1, padding: 0, flexShrink: 0,
+                }}
+              >✕</button>
+              <div style={{
+                position: "absolute", bottom: 0, left: 0, height: 3,
+                background: style.accent, opacity: 0.55,
+              }} className="wc-toast-bar" />
+            </div>
+          );
+        })}
+      </div>
 
       {/* ══════════════════════════════════════════ */}
       {/* 🔥 ARE YOU SURE OVERLAY                   */}
@@ -512,7 +611,7 @@ export default function WappCampaign() {
                   <div className="bg-[#F86C6B] text-white px-4 py-2 text-[15px] flex items-center">Campaign Name</div>
                   <input value={campaignName} onChange={(e) => setCampaignName(e.target.value)}
                     placeholder="Enter campaign name..."
-                    className="border border-gray-300 w-[320px] h-[38px] px-3 outline-none" />
+                    className="wc-input border border-gray-300 w-[320px] h-[38px] px-3 outline-none" />
                 </div>
 
                 {(validCount > 0 || invalidCount > 0 || duplicateCount > 0) && (
@@ -554,7 +653,7 @@ export default function WappCampaign() {
                     onChange={(e) => setNumbers(e.target.value)}
                     onPaste={() => setTimeout(cleanNumbersField, 0)}
                     onBlur={cleanNumbersField}
-                    className="w-full h-[500px] border border-green-400 rounded px-2 py-2 text-[13px] outline-none resize-none" />
+                    className="wc-textarea w-full h-[500px] border border-green-400 rounded px-2 py-2 text-[13px] outline-none resize-none" />
                 </div>
 
                 {/* RIGHT SIDE */}
@@ -562,7 +661,7 @@ export default function WappCampaign() {
                   <p className="mb-1 text-[18px]">Message:</p>
                   <textarea value={message} onChange={(e) => setMessage(e.target.value)}
                     placeholder="Type your WhatsApp message here..."
-                    className="w-full h-[190px] border border-green-400 rounded px-2 py-2 text-[13px] outline-none resize-none mb-3" />
+                    className="wc-textarea w-full h-[190px] border border-green-400 rounded px-2 py-2 text-[13px] outline-none resize-none mb-3" />
 
                   <UploadBox title="📷 Images (Max 4 • 1MB each)" type="image" color="bg-[#63C2DE]" />
                   <div className="flex gap-3 mt-2">
@@ -585,7 +684,7 @@ export default function WappCampaign() {
 
               {/* SEND BUTTON */}
               <button onClick={handleSendClick} disabled={loading}
-                className="mt-4 bg-[#20A8D8] hover:bg-[#1b8db8] text-white px-7 py-3 disabled:opacity-50 flex items-center gap-2">
+                className="mt-4 bg-[#20A8D8] hover:bg-[#1b8db8] text-white px-7 py-3 disabled:opacity-50 flex items-center gap-2 transition-colors duration-150">
                 {loading ? <><span className="animate-spin">⏳</span> Sending...</> : " Send Now"}
               </button>
 

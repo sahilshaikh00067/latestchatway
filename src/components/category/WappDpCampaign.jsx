@@ -33,6 +33,16 @@ function parseAndValidateNumbers(raw) {
   return { valid, invalidCount, duplicateCount };
 }
 
+// ─────────────────────────────────────────────
+// 🔥 TOAST CONFIG
+// ─────────────────────────────────────────────
+const TOAST_STYLES = {
+  error:   { icon: "✕", accent: "#F86C6B", bg: "linear-gradient(135deg, #fff5f5, #ffffff)", ring: "#F86C6B33" },
+  warning: { icon: "⚠", accent: "#F0AD4E", bg: "linear-gradient(135deg, #fffaf0, #ffffff)", ring: "#F0AD4E33" },
+  success: { icon: "✓", accent: "#4DBD74", bg: "linear-gradient(135deg, #f3fdf7, #ffffff)", ring: "#4DBD7433" },
+  info:    { icon: "ℹ", accent: "#20A8D8", bg: "linear-gradient(135deg, #f0f9fd, #ffffff)", ring: "#20A8D833" },
+};
+
 export default function WappDpCampaign() {
   const dpRef = useRef(null);
   const [dp, setDp] = useState(null);
@@ -48,6 +58,18 @@ export default function WappDpCampaign() {
   const [showSuccess, setShowSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
   const [justCleaned, setJustCleaned] = useState(false);
+  const [toasts, setToasts] = useState([]);
+
+  // 🔔 Premium toast — replaces alert()
+  const showToast = useCallback((message, type = "error") => {
+    const id = Date.now() + Math.random();
+    setToasts((prev) => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 3800);
+  }, []);
+
+  const dismissToast = (id) => setToasts((prev) => prev.filter((t) => t.id !== id));
 
   // 🔥 Live stats — recompute on every render from current `numbers` value
   const { valid: validNumbersList, invalidCount, duplicateCount } = parseAndValidateNumbers(numbers);
@@ -80,17 +102,17 @@ export default function WappDpCampaign() {
         if (!acceptedFiles.length) return;
         if (type === "image") {
           const valid = acceptedFiles.filter((f) => f.size <= 1 * 1024 * 1024);
-          if (valid.length !== acceptedFiles.length) alert("❌ Each image must be under 1MB");
+          if (valid.length !== acceptedFiles.length) showToast("Each image must be under 1MB", "warning");
           setImages((prev) => [...prev, ...valid].slice(0, 4));
         }
         if (type === "video") {
           const f = acceptedFiles[0];
-          if (f.size > 3 * 1024 * 1024) { alert("❌ Video must be under 3MB"); return; }
+          if (f.size > 3 * 1024 * 1024) { showToast("Video must be under 3MB", "warning"); return; }
           setVideo(f);
         }
         if (type === "pdf") {
           const f = acceptedFiles[0];
-          if (f.size > 1 * 1024 * 1024) { alert("❌ PDF must be under 1MB"); return; }
+          if (f.size > 1 * 1024 * 1024) { showToast("PDF must be under 1MB", "warning"); return; }
           setPdf(f);
         }
       },
@@ -102,7 +124,7 @@ export default function WappDpCampaign() {
           : !!pdf;
 
     return (
-      <div className="border border-gray-300 rounded overflow-hidden">
+      <div className="border border-gray-300 rounded overflow-hidden transition-shadow duration-200 hover:shadow-sm">
         <div className={`${color} text-white px-4 py-2 text-[13px] font-semibold flex justify-between items-center`}>
           <span>{title}</span>
           {hasFile && (
@@ -113,13 +135,13 @@ export default function WappDpCampaign() {
                 if (type === "video") setVideo(null);
                 if (type === "pdf") setPdf(null);
               }}
-              className="text-white text-xs bg-black bg-opacity-30 px-2 py-0.5 rounded"
+              className="text-white text-xs bg-black bg-opacity-30 hover:bg-opacity-45 px-2 py-0.5 rounded transition-colors duration-150"
             >✕ Remove</button>
           )}
         </div>
         <div
           {...getRootProps()}
-          className={`text-center py-0 text-[13px] cursor-pointer transition ${isDragActive ? "bg-blue-50" : "bg-gray-100 hover:bg-gray-200"}`}
+          className={`text-center py-0 text-[13px] cursor-pointer transition-colors duration-200 ${isDragActive ? "bg-blue-50" : "bg-gray-100 hover:bg-gray-200"}`}
         >
           <input {...getInputProps()} />
           {hasFile ? (
@@ -128,7 +150,7 @@ export default function WappDpCampaign() {
                 <>
                   <div className="flex flex-wrap gap-2 justify-center">
                     {images.map((img, index) => (
-                      <img key={index} src={URL.createObjectURL(img)} alt="preview" className="w-[70px] h-[70px] object-cover rounded border" />
+                      <img key={index} src={URL.createObjectURL(img)} alt="preview" className="w-[70px] h-[70px] object-cover rounded border transition-transform duration-200 hover:scale-105" />
                     ))}
                   </div>
                   <span className="text-green-600 font-semibold text-[12px]">✅ {images.length} Images Selected</span>
@@ -173,54 +195,54 @@ export default function WappDpCampaign() {
   // ===============================
   // 🔥 SEND CAMPAIGN
   // ===============================
-const sendCampaign = async () => {
-  setLoading(true);
-  setShowConfirm(false);
+  const sendCampaign = async () => {
+    setLoading(true);
+    setShowConfirm(false);
 
-  const currentUser = JSON.parse(sessionStorage.getItem("user"));
-  const userId = currentUser?.id;
+    const currentUser = JSON.parse(sessionStorage.getItem("user"));
+    const userId = currentUser?.id;
 
-  if (numberList.length === 0) { alert("Please enter numbers ❌"); setLoading(false); return; }
+    if (numberList.length === 0) { showToast("Please enter numbers", "error"); setLoading(false); return; }
 
-  try {
-    const formData = new FormData();
-    formData.append("message", message);
-    formData.append("user_id", userId);
-    formData.append("campaign_name", campaignName);
-    numberList.forEach((n) => formData.append("numbers", n));
-    if (dp) formData.append("dp", dp);
-    images.forEach((img) => formData.append("images", img));
-    if (video) formData.append("video", video);
-    if (pdf)   formData.append("pdf",   pdf);
+    try {
+      const formData = new FormData();
+      formData.append("message", message);
+      formData.append("user_id", userId);
+      formData.append("campaign_name", campaignName);
+      numberList.forEach((n) => formData.append("numbers", n));
+      if (dp) formData.append("dp", dp);
+      images.forEach((img) => formData.append("images", img));
+      if (video) formData.append("video", video);
+      if (pdf)   formData.append("pdf",   pdf);
 
-    const res  = await fetch("https://latestchatway.onrender.com/api/send-whatsapp/", { method: "POST", body: formData });
-    const data = await res.json();
+      const res  = await fetch("https://latestchatway.onrender.com/api/send-whatsapp/", { method: "POST", body: formData });
+      const data = await res.json();
 
-    if (data.status === "error") {
-      alert(data.message || "Error ❌");
-      setLoading(false);
-      return;
+      if (data.status === "error") {
+        showToast(data.message || "Something went wrong", "error");
+        setLoading(false);
+        return;
+      }
+
+      // ✅ Credit update karo (pending aur done dono mein)
+      if (data.credit_left !== undefined) {
+        const updatedUser = { ...currentUser, credit: data.credit_left };
+        sessionStorage.setItem("user", JSON.stringify(updatedUser));
+      }
+
+      // ✅ Bus success modal dikha — DB mein save ho chuka backend pe
+      setShowSuccess(true);
+      resetForm();
+
+    } catch (err) {
+      console.log("ERROR:", err);
+      showToast("Server error — please try again", "error");
     }
-
-    // ✅ Credit update karo (pending aur done dono mein)
-    if (data.credit_left !== undefined) {
-      const updatedUser = { ...currentUser, credit: data.credit_left };
-      sessionStorage.setItem("user", JSON.stringify(updatedUser));
-    }
-
-    // ✅ Bus success modal dikha — DB mein save ho chuka backend pe
-    setShowSuccess(true);
-    resetForm();
-
-  } catch (err) {
-    console.log("ERROR:", err);
-    alert("Server error ❌");
-  }
-  setLoading(false);
-};
+    setLoading(false);
+  };
 
   const handleSendClick = () => {
-    if (!campaignName || !numbers || !message) { alert("Fill all fields ❌"); return; }
+    if (!campaignName || !numbers || !message) { showToast("Please fill all fields", "warning"); return; }
     setShowConfirm(true);
   };
 
@@ -230,7 +252,7 @@ const sendCampaign = async () => {
   return (
     <div className="min-h-screen bg-[#f1f1f1] relative">
 
-      {/* ── MODAL ANIMATIONS + STATS BADGE CSS ───────────────────────── */}
+      {/* ── MODAL ANIMATIONS + STATS BADGE + TOAST CSS ───────────────────────── */}
       <style>{`
         @keyframes wc-backdrop-in {
           from { opacity: 0; }
@@ -316,7 +338,82 @@ const sendCampaign = async () => {
         @media (max-width: 700px) {
           .camp-header-row { flex-direction: column; align-items: stretch; }
         }
+
+        /* Smoother input focus glow */
+        .wc-input, .wc-textarea {
+          transition: border-color 0.18s ease, box-shadow 0.18s ease;
+        }
+        .wc-input:focus, .wc-textarea:focus {
+          border-color: #20A8D8 !important;
+          box-shadow: 0 0 0 3px #20A8D822;
+          outline: none;
+        }
+
+        /* ═════════════════════════════ TOASTS ═════════════════════════════ */
+        @keyframes toast-in {
+          from { opacity: 0; transform: translateX(60px) scale(0.95); }
+          to   { opacity: 1; transform: translateX(0)     scale(1);   }
+        }
+        @keyframes toast-shrink {
+          from { width: 100%; }
+          to   { width: 0%; }
+        }
+        .wc-toast {
+          animation: toast-in 0.32s cubic-bezier(0.34, 1.3, 0.64, 1) forwards;
+        }
+        .wc-toast-bar {
+          animation: toast-shrink 3.8s linear forwards;
+        }
       `}</style>
+
+      {/* ══════════════════════════════════════════ */}
+      {/* 🔔 TOAST STACK                             */}
+      {/* ══════════════════════════════════════════ */}
+      <div className="fixed top-5 right-5 z-[70] flex flex-col gap-2.5 w-[320px] max-w-[90vw]">
+        {toasts.map((t) => {
+          const style = TOAST_STYLES[t.type] || TOAST_STYLES.error;
+          return (
+            <div
+              key={t.id}
+              className="wc-toast"
+              style={{
+                background: style.bg,
+                border: `1px solid ${style.accent}33`,
+                borderLeft: `4px solid ${style.accent}`,
+                borderRadius: 12,
+                boxShadow: `0 10px 30px rgba(0,0,0,0.12), 0 0 0 4px ${style.ring}`,
+                padding: "12px 14px",
+                display: "flex",
+                alignItems: "flex-start",
+                gap: 10,
+                position: "relative",
+                overflow: "hidden",
+              }}
+            >
+              <div style={{
+                width: 22, height: 22, borderRadius: "50%",
+                background: style.accent, color: "#fff",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: 12, fontWeight: 800, flexShrink: 0, marginTop: 1,
+              }}>{style.icon}</div>
+              <div style={{ flex: 1, fontSize: 13, color: "#2b3948", lineHeight: 1.4, fontWeight: 500 }}>
+                {t.message}
+              </div>
+              <button
+                onClick={() => dismissToast(t.id)}
+                style={{
+                  background: "transparent", border: "none", cursor: "pointer",
+                  color: "#9aa5b1", fontSize: 15, lineHeight: 1, padding: 0, flexShrink: 0,
+                }}
+              >✕</button>
+              <div style={{
+                position: "absolute", bottom: 0, left: 0, height: 3,
+                background: style.accent, opacity: 0.55,
+              }} className="wc-toast-bar" />
+            </div>
+          );
+        })}
+      </div>
 
       {/* ══════════════════════════════════════════ */}
       {/* 🔥 ARE YOU SURE OVERLAY                   */}
@@ -495,7 +592,7 @@ const sendCampaign = async () => {
                     value={campaignName}
                     onChange={(e) => setCampaignName(e.target.value)}
                     placeholder="Enter campaign name..."
-                    className="border border-gray-300 w-[320px] h-[38px] px-3 outline-none"
+                    className="wc-input border border-gray-300 w-[320px] h-[38px] px-3 outline-none"
                   />
                 </div>
 
@@ -539,7 +636,7 @@ const sendCampaign = async () => {
                     onChange={(e) => setNumbers(e.target.value)}
                     onPaste={() => setTimeout(cleanNumbersField, 0)}
                     onBlur={cleanNumbersField}
-                    className="w-full h-[500px] border border-green-400 rounded px-2 py-2 text-[13px] outline-none resize-none"
+                    className="wc-textarea w-full h-[500px] border border-green-400 rounded px-2 py-2 text-[13px] outline-none resize-none"
                   />
                 </div>
 
@@ -550,17 +647,17 @@ const sendCampaign = async () => {
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
                     placeholder="Type your WhatsApp message here..."
-                    className="w-full h-[190px] border border-green-400 rounded px-2 py-2 text-[13px] outline-none resize-none mb-3"
+                    className="wc-textarea w-full h-[190px] border border-green-400 rounded px-2 py-2 text-[13px] outline-none resize-none mb-3"
                   />
 
                   {/* 🔥 DP UPLOAD */}
-                  <div className="border border-gray-300 rounded overflow-hidden mb-2">
+                  <div className="border border-gray-300 rounded overflow-hidden mb-2 transition-shadow duration-200 hover:shadow-sm">
                     <div className="bg-[#F86C6B] text-white px-4 py-2 text-[13px] font-semibold flex justify-between items-center">
                       <span>👤 DP Image — Profile picture set hogi (Max 1MB)</span>
                       {dp && (
                         <button
                           onClick={() => { setDp(null); if (dpRef.current) dpRef.current.value = ""; }}
-                          className="text-white text-xs bg-black bg-opacity-30 px-2 py-0.5 rounded"
+                          className="text-white text-xs bg-black bg-opacity-30 hover:bg-opacity-45 px-2 py-0.5 rounded transition-colors duration-150"
                         >✕ Remove</button>
                       )}
                     </div>
@@ -572,7 +669,7 @@ const sendCampaign = async () => {
                         onChange={(e) => {
                           const f = e.target.files[0];
                           if (!f) return;
-                          if (f.size > 1 * 1024 * 1024) { alert("❌ DP must be under 1MB"); return; }
+                          if (f.size > 1 * 1024 * 1024) { showToast("DP must be under 1MB", "warning"); return; }
                           setDp(f);
                         }}
                         className="text-[13px]"
@@ -581,7 +678,7 @@ const sendCampaign = async () => {
                         <img
                           src={URL.createObjectURL(dp)}
                           alt="DP preview"
-                          className="w-12 h-12 rounded-full object-cover border-2 border-[#F86C6B]"
+                          className="w-12 h-12 rounded-full object-cover border-2 border-[#F86C6B] transition-transform duration-200 hover:scale-105"
                         />
                       )}
                     </div>
@@ -618,7 +715,7 @@ const sendCampaign = async () => {
               <button
                 onClick={handleSendClick}
                 disabled={loading}
-                className=" bg-[#20A8D8] hover:bg-[#1b8db8] text-white px-8 rounded-b-md py-3 disabled:opacity-50 flex items-center gap-2"
+                className="bg-[#20A8D8] hover:bg-[#1b8db8] text-white px-8 rounded-b-md py-3 disabled:opacity-50 flex items-center gap-2 transition-colors duration-150"
               >
                 {loading ? <><span className="animate-spin">⏳</span> Sending...</> : " Send Now"}
               </button>
