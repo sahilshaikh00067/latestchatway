@@ -29,13 +29,10 @@ USERNAME = "APIDEMO"
 # NOTE: move these to environment variables / Django settings in production
 # (e.g. os.environ["CHATWAY_TOKENS"].split(",")) instead of hardcoding secrets in code.
 TOKENS = [
-"aDl4RzQ0bG5Cc3liOUZvYkhyUG1HUT09",
-"SnNmbFphVTJkUllFYVBmOWtkbjd1Zz09",
-"T20rUUJYc3NiOUZjUlVIT1BBajUyQT09",
-"a2RaTXNkRUlXT0hVZ0NVNjZwSTlxUT09",
 "bHVjM3VraHg1WlUwMDhCa2pQNHA2QT09",
-"Um1KbnhWS0FKQVRBclZlZUhUbUFnQT09",
-"Y1pROG1QM0dDQkxUcEhEajJ0OFZzUT09",
+"a2RaTXNkRUlXT0hVZ0NVNjZwSTlxUT09",
+"T20rUUJYc3NiOUZjUlVIT1BBajUyQT09",
+"Um1KbnhWS0FKQVRBclZlZUhUbUFnQT09"
 ]
 TOKEN_COUNT = len(TOKENS)
 
