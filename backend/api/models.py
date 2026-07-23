@@ -46,13 +46,17 @@ class CreditLog(models.Model):
 
     def __str__(self):
         return f"{self.action} {self.amount} | {self.from_user} → {self.to_user}"
-    
 
-    
+
+
 class Campaign(models.Model):
     STATUS_CHOICES = (
-        ("pending",   "Pending"),
-        ("completed", "Completed"),
+        ("pending",        "Pending"),
+        ("completed",      "Completed"),
+        ("scheduled",      "Scheduled"),        # 🆕 waiting for scheduled_at to arrive
+        ("sending",        "Sending"),           # 🆕 scheduler picked it up, send in progress
+        ("failed_to_send", "Failed To Send"),    # 🆕 scheduled send crashed before completing
+        ("cancelled",      "Cancelled"),         # 🆕 cancel_campaign() sets this
     )
 
     user          = models.ForeignKey(User, on_delete=models.CASCADE)
@@ -61,8 +65,8 @@ class Campaign(models.Model):
     total         = models.IntegerField(default=0)
     success       = models.IntegerField(default=0)
     failed        = models.IntegerField(default=0)
-    nonwa         = models.IntegerField(default=0)                    # ← ADD
-    rejected      = models.IntegerField(default=0)                    # ← ADD
+    nonwa         = models.IntegerField(default=0)
+    rejected      = models.IntegerField(default=0)
     status        = models.CharField(
         max_length=20,
         choices=STATUS_CHOICES,
@@ -70,8 +74,9 @@ class Campaign(models.Model):
     )
     results       = models.JSONField(default=list, blank=True)
     number_list   = models.JSONField(default=list, blank=True)
-    file_urls     = models.JSONField(default=list, blank=True)        # ← ADD
-    complete_at   = models.DateTimeField(null=True, blank=True)       # ← ADD
+    file_urls     = models.JSONField(default=list, blank=True)
+    complete_at   = models.DateTimeField(null=True, blank=True)
+    scheduled_at  = models.DateTimeField(null=True, blank=True)       # 🆕 when a scheduled campaign should fire
     created_at    = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

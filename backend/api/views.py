@@ -4,11 +4,14 @@ import re
 import time
 import uuid
 import csv
+import json
 import threading
-from datetime import timedelta
+from collections import Counter, defaultdict
+from datetime import timedelta, datetime
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Q, Count, Sum
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 from django.http import HttpResponse
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
@@ -17,6 +20,7 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 from concurrent.futures import ThreadPoolExecutor
 from .models import User, CreditLog, Campaign
+
 logger = logging.getLogger(__name__)
 
 USERNAME = "APIDEMO"
@@ -48,6 +52,16 @@ FILE_POOL_SIZE = TOKEN_COUNT * MAX_WORKERS_FILE   # 70
 
 NUMBER_RE = re.compile(r"91\d{10}")
 
+# ═════════════════════════════════════════════════════════════════════════
+# 🆕 RETRY CONFIG — multi-round retry with exponential backoff instead of
+# a single hardcoded retry pass. Each round shifts the token order further
+# so a failing number doesn't keep hitting the same "bad" token.
+# ═════════════════════════════════════════════════════════════════════════
+MAX_RETRY_ROUNDS   = 3          # total attempts = 1 (initial) + this many
+RETRY_BACKOFF_BASE = 0.6        # seconds; round N sleeps ~ base * 2^(N-1)
+RETRY_TOKEN_SHIFT  = 3           # how many tokens to shift per retry round
+
+
 # ─────────────────────────────────────────
 # 🔥 SHARED HTTP SESSION — connection pooling = much faster bulk sends
 # ─────────────────────────────────────────
@@ -74,6 +88,7 @@ _session.mount("http://", _adapter)
 TEXT_EXECUTOR = ThreadPoolExecutor(max_workers=TEXT_POOL_SIZE, thread_name_prefix="wapp-text")
 FILE_EXECUTOR = ThreadPoolExecutor(max_workers=FILE_POOL_SIZE, thread_name_prefix="wapp-file")
 UPLOAD_EXECUTOR = ThreadPoolExecutor(max_workers=MAX_WORKERS_UPLOAD, thread_name_prefix="wapp-upload")
+SCHEDULER_EXECUTOR = ThreadPoolExecutor(max_workers=2, thread_name_prefix="wapp-scheduler")
 
 TEXT_TIMEOUT = (3, 5)    # (connect, read)
 FILE_TIMEOUT = (3, 8)
@@ -83,6 +98,27 @@ ADMIN_TIMEOUT = (3, 4)
 def batch_token_index(position):
     """🔥 3-per-token batching: position 0,1,2 → token0 | 3,4,5 → token1 | ..."""
     return (position // BATCH_SIZE_PER_TOKEN) % TOKEN_COUNT
+
+
+# ═════════════════════════════════════════════════════════════════════════
+# 📝 STRUCTURED LOGGING
+# Every campaign / send-round now logs a single-line JSON blob so it's
+# trivial to grep, ship to a log aggregator (Loki/ELK/CloudWatch), or
+# pipe into the analytics endpoints below.
+# ═════════════════════════════════════════════════════════════════════════
+campaign_logger = logging.getLogger("chatway.campaign")
+
+
+def log_event(event, **fields):
+    """
+    Structured, single-line JSON log entry. Never raises — logging must
+    never be able to break a send.
+    """
+    try:
+        payload = {"event": event, "ts": timezone.now().isoformat(), **fields}
+        campaign_logger.info(json.dumps(payload, default=str))
+    except Exception:
+        logger.exception("log_event failed for event=%s", event)
 
 
 # ═════════════════════════════════════════════════════════════════════════
@@ -96,17 +132,23 @@ TOKEN_COOLDOWN_SECONDS = 60
 _token_health_lock    = threading.Lock()
 _token_fail_count     = {i: 0 for i in range(TOKEN_COUNT)}
 _token_cooldown_until = {i: 0 for i in range(TOKEN_COUNT)}
+_token_total_sent     = {i: 0 for i in range(TOKEN_COUNT)}   # 🆕 lifetime send counter per token
+_token_total_failed   = {i: 0 for i in range(TOKEN_COUNT)}   # 🆕 lifetime failure counter per token
 
 
 def _mark_token_result(idx, ok):
     with _token_health_lock:
+        _token_total_sent[idx] = _token_total_sent.get(idx, 0) + 1
         if ok:
             _token_fail_count[idx] = 0
             _token_cooldown_until[idx] = 0
         else:
+            _token_total_failed[idx] = _token_total_failed.get(idx, 0) + 1
             _token_fail_count[idx] = _token_fail_count.get(idx, 0) + 1
             if _token_fail_count[idx] >= TOKEN_FAIL_THRESHOLD:
                 _token_cooldown_until[idx] = time.time() + TOKEN_COOLDOWN_SECONDS
+                log_event("token_cooldown_triggered", token_index=idx,
+                          fail_count=_token_fail_count[idx], cooldown_seconds=TOKEN_COOLDOWN_SECONDS)
 
 
 def _token_order(token_index):
@@ -121,6 +163,32 @@ def _token_order(token_index):
     return healthy[start:] + healthy[:start] + cooling
 
 
+@api_view(['GET'])
+def token_health_status(request):
+    """
+    🆕 ANALYTICS — live view of every token's health: how many sends,
+    how many failures, current fail-streak, and whether it's cooling down.
+    Handy for an admin dashboard widget.
+    """
+    now = time.time()
+    with _token_health_lock:
+        data = []
+        for i in range(TOKEN_COUNT):
+            sent = _token_total_sent.get(i, 0)
+            failed = _token_total_failed.get(i, 0)
+            cooldown_until = _token_cooldown_until.get(i, 0)
+            data.append({
+                "token_index":     i,
+                "total_sent":      sent,
+                "total_failed":    failed,
+                "failure_rate":    round((failed / sent) * 100, 2) if sent else 0,
+                "current_streak":  _token_fail_count.get(i, 0),
+                "status":          "cooling_down" if cooldown_until > now else "healthy",
+                "cooldown_remaining_seconds": max(0, round(cooldown_until - now)) if cooldown_until > now else 0,
+            })
+    return Response({"status": "success", "tokens": data})
+
+
 # ═════════════════════════════════════════════════════════════════════════
 # 📊 LIVE PROGRESS TRACKER
 # ═════════════════════════════════════════════════════════════════════════
@@ -133,6 +201,7 @@ def _init_progress(job_id, total):
         _progress_store[job_id] = {
             "total": total, "done": 0,
             "success": 0, "failed": 0, "nonwa": 0, "rejected": 0,
+            "started_at": time.time(),
         }
 
 
@@ -159,7 +228,9 @@ def campaign_progress(request):
         p = _progress_store.get(job_id)
     if not p:
         return Response({"status": "failed", "message": "No active job (finished already or invalid id)"})
-    return Response({"status": "success", **p})
+    elapsed = round(time.time() - p.get("started_at", time.time()), 1)
+    rate = round(p["done"] / elapsed, 2) if elapsed > 0 else 0
+    return Response({"status": "success", **p, "elapsed_seconds": elapsed, "sends_per_second": rate})
 
 
 def _personalize(message, number):
@@ -371,6 +442,7 @@ def campaign_results_csv(request):
 @api_view(['GET'])
 def my_campaigns(request):
     auto_complete_pending_campaigns()
+    process_scheduled_campaigns()   # 🆕 fire any due scheduled campaigns while we're here
 
     try:
         user_id = request.query_params.get("user_id")
@@ -396,6 +468,7 @@ def my_campaigns(request):
             "rawDate":       int(c.created_at.timestamp() * 1000),
             "numberResults": c.results,
             "numberList":    c.number_list,
+            "scheduledAt":   c.scheduled_at.strftime("%d-%m-%Y %H:%M") if getattr(c, "scheduled_at", None) else None,
         } for c in campaigns]
 
         return Response({"status": "success", "campaigns": data})
@@ -431,6 +504,9 @@ def _simulate_and_close_campaign(campaign):
     campaign.failed  = simulated_failed
     campaign.results = number_results
     campaign.save(update_fields=["status", "success", "failed", "results"])
+
+    log_event("campaign_auto_completed", campaign_id=campaign.id,
+              total=campaign.total, success=simulated_success, failed=simulated_failed)
 
     # 🚫 No refund — credit already reserved in full, stays deducted regardless of outcome.
 
@@ -480,8 +556,7 @@ def complete_campaign(request):
 # ❌ CANCEL PENDING CAMPAIGN
 # (Refund kept HERE ONLY — nothing was ever sent/attempted for a still-
 # queued campaign, so this is not a "result refund", it's an un-charge
-# for numbers that never left the queue. Tell me if you want this
-# removed too and I'll make cancellation non-refundable as well.)
+# for numbers that never left the queue.)
 # ─────────────────────────────────────────
 @api_view(['POST'])
 def cancel_campaign(request):
@@ -489,8 +564,8 @@ def cancel_campaign(request):
         campaign_id = request.data.get("campaign_id")
         campaign = Campaign.objects.get(id=campaign_id)
 
-        if campaign.status != "pending":
-            return Response({"status": "failed", "message": "Only pending campaigns can be cancelled"})
+        if campaign.status not in ("pending", "scheduled"):
+            return Response({"status": "failed", "message": "Only pending/scheduled campaigns can be cancelled"})
 
         refund_credit(
             campaign.user_id, campaign.total,
@@ -498,6 +573,8 @@ def cancel_campaign(request):
         )
         campaign.status = "cancelled"
         campaign.save(update_fields=["status"])
+
+        log_event("campaign_cancelled", campaign_id=campaign.id, total=campaign.total)
 
         return Response({"status": "success", "message": "Campaign cancelled and credits refunded"})
 
@@ -892,6 +969,51 @@ def send_all_files_to_number(args):
     return {"status": final}
 
 
+# ═════════════════════════════════════════════════════════════════════════
+# 🆕 MULTI-ROUND RETRY WITH EXPONENTIAL BACKOFF
+# Only "failed" (genuine network/token errors) are retried — nonwa/rejected
+# are terminal states and are never retried, same as before. Instead of one
+# fixed retry pass, this now runs up to MAX_RETRY_ROUNDS extra rounds, with
+# an increasing backoff sleep and a bigger token shift each round.
+# ═════════════════════════════════════════════════════════════════════════
+def _retry_failed_sends(results, numbers, message, file_list, job_id=None):
+    for round_num in range(1, MAX_RETRY_ROUNDS + 1):
+        failed_indices = [i for i, r in enumerate(results) if r["status"] == "failed"]
+        if not failed_indices:
+            break
+
+        backoff = RETRY_BACKOFF_BASE * (2 ** (round_num - 1))
+        log_event("retry_round_start", round=round_num, failed_count=len(failed_indices), backoff_seconds=backoff)
+        time.sleep(backoff)
+
+        shift = RETRY_TOKEN_SHIFT * round_num
+        if file_list:
+            retry_tasks = [
+                (numbers[i], message, file_list, (batch_token_index(i) + shift) % TOKEN_COUNT, None)
+                for i in failed_indices
+            ]
+            retry_results = list(FILE_EXECUTOR.map(send_all_files_to_number, retry_tasks))
+        else:
+            retry_tasks = [
+                (numbers[i], message, (batch_token_index(i) + shift) % TOKEN_COUNT, None)
+                for i in failed_indices
+            ]
+            retry_results = list(TEXT_EXECUTOR.map(send_single_text, retry_tasks))
+
+        recovered = 0
+        for idx, rr in zip(failed_indices, retry_results):
+            results[idx] = rr
+            if rr["status"] != "failed":
+                recovered += 1
+            if job_id:
+                _bump_progress(job_id, rr["status"])
+
+        log_event("retry_round_done", round=round_num, recovered=recovered,
+                  still_failed=len(failed_indices) - recovered)
+
+    return results
+
+
 # ─────────────────────────────────────────
 # NOTIFY ADMIN
 # ─────────────────────────────────────────
@@ -963,6 +1085,204 @@ def _collect_uploaded_files(request):
     return file_list
 
 
+# ═════════════════════════════════════════════════════════════════════════
+# 🆕 CORE SEND EXECUTOR — shared by the immediate (≤15 numbers) path and
+# the scheduled-campaign runner, so scheduling doesn't duplicate logic.
+# Credit must already be reserved before this is called.
+# ═════════════════════════════════════════════════════════════════════════
+def _execute_send(user, campaign_name, numbers, message, file_list, existing_campaign=None):
+    job_id = str(uuid.uuid4())
+    _init_progress(job_id, len(numbers))
+    t0 = time.time()
+
+    log_event("campaign_send_start", campaign_name=campaign_name, user=user.username,
+              total=len(numbers), has_files=bool(file_list), job_id=job_id)
+
+    if file_list:
+        tasks = [(num, message, file_list, batch_token_index(i), job_id) for i, num in enumerate(numbers)]
+        results = list(FILE_EXECUTOR.map(send_all_files_to_number, tasks))
+    else:
+        tasks = [(num, message, batch_token_index(i), job_id) for i, num in enumerate(numbers)]
+        results = list(TEXT_EXECUTOR.map(send_single_text, tasks))
+
+    # 🔁 Multi-round retry (was: single retry pass)
+    results = _retry_failed_sends(results, numbers, message, file_list, job_id=job_id)
+
+    _clear_progress(job_id)
+
+    success = failed = nonwa = rejected = 0
+    for r in results:
+        if r["status"] == "success":    success  += 1
+        elif r["status"] == "nonwa":    nonwa    += 1
+        elif r["status"] == "rejected": rejected += 1
+        else:                           failed   += 1
+
+    number_results = [{"number": num, "status": r["status"]} for num, r in zip(numbers, results)]
+    elapsed = round(time.time() - t0, 2)
+
+    if existing_campaign is not None:
+        existing_campaign.success = success
+        existing_campaign.failed  = failed
+        existing_campaign.nonwa   = nonwa
+        existing_campaign.rejected = rejected
+        existing_campaign.results = number_results
+        existing_campaign.status  = "completed"
+        existing_campaign.save(update_fields=["success", "failed", "nonwa", "rejected", "results", "status"])
+    else:
+        Campaign.objects.create(
+            user=user,
+            campaign_name=campaign_name,
+            message=message,
+            total=len(numbers),
+            success=success,
+            failed=failed,
+            nonwa=nonwa,
+            rejected=rejected,
+            results=number_results,
+            status="completed",
+            file_urls=[f[0] for f in file_list] if file_list else [],
+        )
+
+    log_event("campaign_send_done", campaign_name=campaign_name, user=user.username,
+              total=len(numbers), success=success, failed=failed, nonwa=nonwa,
+              rejected=rejected, elapsed_seconds=elapsed, job_id=job_id)
+
+    if not user.is_admin():
+        user.refresh_from_db(fields=["credit"])
+        final_credit_left = user.credit
+    else:
+        final_credit_left = "unlimited"
+
+    if len(numbers) > 5:
+        try:
+            notify_admin(campaign_name, len(numbers), success, failed, nonwa, rejected, user.username)
+        except Exception:
+            pass
+
+    return {
+        "success": success, "failed": failed, "nonwa": nonwa, "rejected": rejected,
+        "credit_left": final_credit_left, "results": number_results, "elapsed_seconds": elapsed,
+    }
+
+
+# ═════════════════════════════════════════════════════════════════════════
+# 🆕 CAMPAIGN SCHEDULING
+# Requires 2 new fields on the Campaign model (see migration note at the
+# bottom of this file): `scheduled_at` (DateTimeField, null=True, blank=True)
+# and a `"scheduled"` option added to the `status` choices.
+# Credit is reserved immediately on scheduling (same "no surprises" policy
+# as everything else); the actual send fires when `process_scheduled_campaigns`
+# next runs and finds a due campaign.
+# ═════════════════════════════════════════════════════════════════════════
+def process_scheduled_campaigns():
+    """
+    Finds every campaign whose scheduled_at has arrived and actually sends
+    it. Call this from: my_campaigns (already wired in above), a cron hitting
+    `run_scheduled_campaigns` below, or a periodic Celery beat task if you
+    add Celery later.
+    """
+    try:
+        now = timezone.now()
+        due = Campaign.objects.filter(status="scheduled", scheduled_at__lte=now).select_related("user")
+        for campaign in due:
+            # Flip to "sending" first so a slow request + a cron tick can't double-send.
+            updated = Campaign.objects.filter(id=campaign.id, status="scheduled").update(status="sending")
+            if not updated:
+                continue  # someone else already picked this one up
+            SCHEDULER_EXECUTOR.submit(_run_one_scheduled_campaign, campaign.id)
+    except Exception as e:
+        logger.exception("process_scheduled_campaigns error: %s", e)
+
+
+def _run_one_scheduled_campaign(campaign_id):
+    try:
+        campaign = Campaign.objects.select_related("user").get(id=campaign_id)
+        numbers = campaign.number_list or []
+        file_list = [(url, url.split("/")[-1]) for url in (campaign.file_urls or [])]
+        _execute_send(campaign.user, campaign.campaign_name, numbers, campaign.message,
+                      file_list, existing_campaign=campaign)
+    except Exception as e:
+        logger.exception("_run_one_scheduled_campaign error for id=%s: %s", campaign_id, e)
+        Campaign.objects.filter(id=campaign_id).update(status="failed_to_send")
+
+
+@api_view(['POST'])
+def run_scheduled_campaigns(request):
+    """
+    🆕 Hit this from an external cron (e.g. cron-job.org, GitHub Actions
+    schedule, or Render's cron jobs) every 1-2 minutes to fire due
+    scheduled campaigns. Safe to call anytime — it's a no-op if nothing
+    is due.
+    """
+    process_scheduled_campaigns()
+    return Response({"status": "success", "message": "Scheduled campaigns checked & dispatched"})
+
+
+# ═════════════════════════════════════════════════════════════════════════
+# 🆕 ANALYTICS ENDPOINTS
+# ═════════════════════════════════════════════════════════════════════════
+@api_view(['GET'])
+def campaign_analytics(request):
+    """
+    Aggregate stats for a dashboard: totals, success rate, per-day volume
+    (last 7 days), and the numbers that fail most often across campaigns
+    (useful for spotting dead/invalid numbers in a list).
+    """
+    try:
+        user_id = request.query_params.get("user_id")
+        user = User.objects.get(id=user_id)
+
+        qs = Campaign.objects.all() if user.is_admin() else Campaign.objects.filter(user=user)
+        completed = qs.filter(status="completed")
+
+        totals = completed.aggregate(
+            total_numbers=Sum("total"), total_success=Sum("success"),
+            total_failed=Sum("failed"), total_nonwa=Sum("nonwa"), total_rejected=Sum("rejected"),
+        )
+        total_numbers = totals["total_numbers"] or 0
+        total_success = totals["total_success"] or 0
+        success_rate = round((total_success / total_numbers) * 100, 2) if total_numbers else 0
+
+        # Per-day campaign volume, last 7 days
+        since = timezone.now() - timedelta(days=7)
+        daily = (
+            qs.filter(created_at__gte=since)
+              .extra(select={"day": "date(created_at)"})
+              .values("day")
+              .annotate(campaigns=Count("id"), numbers=Sum("total"))
+              .order_by("day")
+        )
+
+        # Top-failing numbers across recent completed campaigns (last 500 campaigns scanned)
+        fail_counter = Counter()
+        for c in completed.order_by("-created_at")[:500]:
+            for row in (c.results or []):
+                if row.get("status") in ("failed", "nonwa", "rejected"):
+                    fail_counter[row.get("number")] += 1
+        top_failing = [{"number": n, "fail_count": cnt} for n, cnt in fail_counter.most_common(10)]
+
+        return Response({
+            "status": "success",
+            "totals": {
+                "campaigns":     qs.count(),
+                "total_numbers": total_numbers,
+                "total_success": total_success,
+                "total_failed":  totals["total_failed"] or 0,
+                "total_nonwa":   totals["total_nonwa"] or 0,
+                "total_rejected": totals["total_rejected"] or 0,
+                "success_rate_pct": success_rate,
+            },
+            "daily_volume_last_7_days": list(daily),
+            "top_failing_numbers": top_failing,
+        })
+
+    except User.DoesNotExist:
+        return Response({"status": "failed", "message": "User not found"})
+    except Exception as e:
+        logger.exception("campaign_analytics error")
+        return Response({"status": "error", "message": str(e)})
+
+
 # ─────────────────────────────────────────
 # SEND WHATSAPP CAMPAIGN
 # ─────────────────────────────────────────
@@ -985,22 +1305,59 @@ def send_whatsapp(request):
         user_id       = request.data.get("user_id")
         campaign_name = request.data.get("campaign_name", "N/A")
 
+        # 🆕 Optional scheduling: pass `scheduled_at` as an ISO datetime string
+        # (e.g. "2026-07-24T18:30:00+05:30"). If it's in the future, the
+        # campaign is queued instead of sent immediately.
+        scheduled_at_raw = request.data.get("scheduled_at")
+        scheduled_at = parse_datetime(scheduled_at_raw) if scheduled_at_raw else None
+        is_scheduled = bool(scheduled_at and scheduled_at > timezone.now())
+
         # 🔒 Reserve credit for the FULL number count up-front, atomically.
         # This deduction is FINAL — no refund happens later, regardless of
-        # success/failed/nonwa/rejected outcome.
+        # success/failed/nonwa/rejected outcome (except cancel-before-send).
         ok, err, credit_left, user = reserve_credit(
             user_id, len(numbers),
             f"Campaign '{campaign_name}' — {len(numbers)} numbers charged"
         )
         if not ok:
+            log_event("campaign_credit_rejected", user_id=user_id, campaign_name=campaign_name,
+                      requested=len(numbers), reason=err)
             return Response({"status": "error", "message": err})
+
+        file_list = _collect_uploaded_files(request)
+
+        # ─────────────────────────────────────────
+        # 🆕 SCHEDULED MODE — future scheduled_at wins over everything else
+        # ─────────────────────────────────────────
+        if is_scheduled:
+            campaign = Campaign.objects.create(
+                user=user,
+                campaign_name=campaign_name,
+                message=message,
+                total=len(numbers),
+                success=0, failed=0, nonwa=0, rejected=0,
+                results=[],
+                status="scheduled",
+                scheduled_at=scheduled_at,
+                file_urls=[f[0] for f in file_list],
+                number_list=numbers,
+            )
+            log_event("campaign_scheduled", campaign_id=campaign.id, campaign_name=campaign_name,
+                      user=user.username, total=len(numbers), scheduled_at=scheduled_at)
+
+            return Response({
+                "status":       "scheduled",
+                "campaign_id":  campaign.id,
+                "message":      f"Campaign scheduled for {scheduled_at.strftime('%d-%m-%Y %H:%M')}",
+                "total":        len(numbers),
+                "credit_left":  credit_left,
+                "scheduled_at": scheduled_at.isoformat(),
+            })
 
         # ─────────────────────────────────────────
         # >15 NUMBERS = PENDING MODE
         # ─────────────────────────────────────────
         if len(numbers) > 15:
-            file_list = _collect_uploaded_files(request)
-
             delay_minutes = random.randint(15, 25)
             complete_at   = timezone.now() + timedelta(minutes=delay_minutes)
 
@@ -1021,6 +1378,8 @@ def send_whatsapp(request):
             )
 
             notify_admin(campaign_name, len(numbers), 0, 0, 0, 0, user.username, pending=True)
+            log_event("campaign_queued_pending", campaign_id=campaign.id, total=len(numbers),
+                      delay_minutes=delay_minutes)
 
             return Response({
                 "status":      "pending",
@@ -1032,86 +1391,51 @@ def send_whatsapp(request):
             })
 
         # ─────────────────────────────────────────
-        # ≤15 NUMBERS = NORMAL SEND
-        # 🔥 3-per-token batching: numbers[0..2] → token0, [3..5] → token1, ...
+        # ≤15 NUMBERS = NORMAL IMMEDIATE SEND
+        # (now routed through the shared _execute_send executor)
         # ─────────────────────────────────────────
-        file_list = _collect_uploaded_files(request)
-
-        job_id = str(uuid.uuid4())
-        _init_progress(job_id, len(numbers))
-
-        if file_list:
-            tasks = [(num, message, file_list, batch_token_index(i), job_id) for i, num in enumerate(numbers)]
-            results = list(FILE_EXECUTOR.map(send_all_files_to_number, tasks))
-        else:
-            tasks = [(num, message, batch_token_index(i), job_id) for i, num in enumerate(numbers)]
-            results = list(TEXT_EXECUTOR.map(send_single_text, tasks))
-
-        # 🔁 Auto-retry ONCE for genuine failures (token/network issues) with a
-        # shifted token order. nonwa/rejected are terminal and NOT retried.
-        failed_indices = [i for i, r in enumerate(results) if r["status"] == "failed"]
-        if failed_indices:
-            if file_list:
-                retry_tasks = [(numbers[i], message, file_list, (batch_token_index(i) + 3) % TOKEN_COUNT, None) for i in failed_indices]
-                retry_results = list(FILE_EXECUTOR.map(send_all_files_to_number, retry_tasks))
-            else:
-                retry_tasks = [(numbers[i], message, (batch_token_index(i) + 3) % TOKEN_COUNT, None) for i in failed_indices]
-                retry_results = list(TEXT_EXECUTOR.map(send_single_text, retry_tasks))
-            for idx, rr in zip(failed_indices, retry_results):
-                results[idx] = rr
-
-        _clear_progress(job_id)
-
-        success = failed = nonwa = rejected = 0
-        for r in results:
-            if r["status"] == "success":    success  += 1
-            elif r["status"] == "nonwa":    nonwa    += 1
-            elif r["status"] == "rejected": rejected += 1
-            else:                           failed   += 1
-
-        number_results = [{"number": num, "status": r["status"]} for num, r in zip(numbers, results)]
-
-        Campaign.objects.create(
-            user=user,
-            campaign_name=campaign_name,
-            message=message,
-            total=len(numbers),
-            success=success,
-            failed=failed,
-            nonwa=nonwa,
-            rejected=rejected,
-            results=number_results,
-            status="completed",
-            file_urls=[],
-        )
-
-        # 🚫 NO REFUND — full amount reserved above stays deducted no matter
-        # what the outcome was (success / failed / nonwa / rejected).
-        if not user.is_admin():
-            user.refresh_from_db(fields=["credit"])
-            final_credit_left = user.credit
-        else:
-            final_credit_left = "unlimited"
-
-        if len(numbers) > 5:
-            try:
-                notify_admin(campaign_name, len(numbers), success, failed, nonwa, rejected, user.username)
-            except Exception:
-                pass
+        outcome = _execute_send(user, campaign_name, numbers, message, file_list)
 
         return Response({
             "status":      "done",
-            "success":     success,
-            "failed":      failed,
-            "nonwa":       nonwa,
-            "rejected":    rejected,
-            "credit_left": final_credit_left,
+            "success":     outcome["success"],
+            "failed":      outcome["failed"],
+            "nonwa":       outcome["nonwa"],
+            "rejected":    outcome["rejected"],
+            "credit_left": outcome["credit_left"],
             "files_sent":  len(file_list),
             "file_urls":   [f[0] for f in file_list],
-            "results":     number_results,
+            "results":     outcome["results"],
             "tokens_used": TOKEN_COUNT,
+            "elapsed_seconds": outcome["elapsed_seconds"],
         })
 
     except Exception as e:
         logger.exception("send_whatsapp error")
         return Response({"status": "error", "message": str(e)})
+
+
+# ═════════════════════════════════════════════════════════════════════════
+# 📌 MIGRATION NOTE — required Campaign model changes for scheduling
+# ═════════════════════════════════════════════════════════════════════════
+#
+# Add to models.py, inside the Campaign model:
+#
+#     scheduled_at = models.DateTimeField(null=True, blank=True)
+#
+# And make sure your `status` field (CharField/choices) allows these values
+# in addition to whatever you already have:
+#     "scheduled", "sending", "failed_to_send"
+#
+# Then:
+#     python manage.py makemigrations
+#     python manage.py migrate
+#
+# New URLs to wire up in urls.py:
+#     path('token-health/', token_health_status),
+#     path('campaign-analytics/', campaign_analytics),
+#     path('run-scheduled-campaigns/', run_scheduled_campaigns),   # hit via cron every 1-2 min
+#
+# Optional: also wire an external cron (Render Cron Job / cron-job.org) to
+# hit /run-scheduled-campaigns/ every 1-2 minutes so scheduled sends fire
+# even if nobody is actively loading `my_campaigns` at that moment.
