@@ -1,12 +1,21 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import { Calendar } from "lucide-react";
 import * as XLSX from "xlsx";
 
 const BASE = "https://latestchatway.onrender.com/api";
 
+// ─────────────────────────────────────────────
+// 🔔 TOAST CONFIG
+// ─────────────────────────────────────────────
+const TOAST_STYLES = {
+  error:   { icon: "✕", accent: "#F86C6B", bg: "linear-gradient(135deg, #fff5f5, #ffffff)", ring: "#F86C6B33" },
+  warning: { icon: "⚠", accent: "#F0AD4E", bg: "linear-gradient(135deg, #fffaf0, #ffffff)", ring: "#F0AD4E33" },
+  success: { icon: "✓", accent: "#4DBD74", bg: "linear-gradient(135deg, #f3fdf7, #ffffff)", ring: "#4DBD7433" },
+  info:    { icon: "ℹ", accent: "#20A8D8", bg: "linear-gradient(135deg, #f0f9fd, #ffffff)", ring: "#20A8D833" },
+};
 
 const WappReports = () => {
-const currentUser = JSON.parse(sessionStorage.getItem("user") || "null");
+  const currentUser = JSON.parse(sessionStorage.getItem("user") || "null");
   const role = currentUser?.role?.toLowerCase();
   const [filterOpen, setFilterOpen] = useState(false);
   const [selectedFilter, setSelectedFilter] = useState("Today");
@@ -19,31 +28,43 @@ const currentUser = JSON.parse(sessionStorage.getItem("user") || "null");
   const [perPage, setPerPage] = useState(10);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [toasts, setToasts] = useState([]);
   const intervalRef = useRef(null);
 
   const filters = ["Today", "Yesterday", "Last 7 Days", "Last 30 Days", "This Month", "Last Month", "Custom Range"];
 
+  // 🔔 Premium toast — replaces alert()
+  const showToast = useCallback((message, type = "error") => {
+    const id = Date.now() + Math.random();
+    setToasts((prev) => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 3800);
+  }, []);
+
+  const dismissToast = (id) => setToasts((prev) => prev.filter((t) => t.id !== id));
+
   // ─────────────────────────────────────────
   // FETCH FROM DB
   // ─────────────────────────────────────────
-const fetchCampaigns = async () => {
-  if (!currentUser) return;
+  const fetchCampaigns = async () => {
+    if (!currentUser) return;
 
-  setLoading(true);
+    setLoading(true);
 
-  try {
-    const res = await fetch(`${BASE}/my-campaigns/?user_id=${currentUser.id}`);
-    const data = await res.json();
+    try {
+      const res = await fetch(`${BASE}/my-campaigns/?user_id=${currentUser.id}`);
+      const data = await res.json();
 
-    if (data.status === "success") {
-      setAllEntries(data.campaigns);
+      if (data.status === "success") {
+        setAllEntries(data.campaigns);
+      }
+    } catch (err) {
+      console.error(err);
     }
-  } catch (err) {
-    console.error(err);
-  }
 
-  setLoading(false);
-};
+    setLoading(false);
+  };
 
   // Page load pe fetch karo
   useEffect(() => {
@@ -111,42 +132,43 @@ const fetchCampaigns = async () => {
   // ─────────────────────────────────────────
   // DOWNLOAD EXCEL
   // ─────────────────────────────────────────
-const handleDownload = (data) => {
-  let rows = [];
+  const handleDownload = (data) => {
+    let rows = [];
 
-  // Completed campaign
-  if (data.numberResults && data.numberResults.length > 0) {
-    // 🔥 Random shuffle — Success/Failed/NonWA/Rejected sab mix ho jayenge
-    const shuffled = [...data.numberResults].sort(() => Math.random() - 0.5);
+    // Completed campaign
+    if (data.numberResults && data.numberResults.length > 0) {
+      // 🔥 Random shuffle — Success/Failed/NonWA/Rejected sab mix ho jayenge
+      const shuffled = [...data.numberResults].sort(() => Math.random() - 0.5);
 
-    rows = shuffled.map((r) => ({
-      Number: r.number,
-      Status: (r.status || "").toUpperCase(),
-    }));
-  }
+      rows = shuffled.map((r) => ({
+        Number: r.number,
+        Status: (r.status || "").toUpperCase(),
+      }));
+    }
 
-  // Pending campaign - Admin only
-  else if (role === "admin" && data.numberList && data.numberList.length > 0) {
-    rows = data.numberList.map((num) => ({
-      Number: num,
-      Status: "PENDING",
-    }));
-  }
+    // Pending campaign - Admin only
+    else if (role === "admin" && data.numberList && data.numberList.length > 0) {
+      rows = data.numberList.map((num) => ({
+        Number: num,
+        Status: "PENDING",
+      }));
+    }
 
-  // No data
-  else {
-    alert("No number data available for this campaign.");
-    return;
-  }
+    // No data
+    else {
+      showToast("No number data available for this campaign", "warning");
+      return;
+    }
 
-  const ws = XLSX.utils.json_to_sheet(rows);
-  ws["!cols"] = [{ wch: 20 }, { wch: 15 }];
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws["!cols"] = [{ wch: 20 }, { wch: 15 }];
 
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Campaign Report");
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Campaign Report");
 
-  XLSX.writeFile(wb, `${data.name || "report"}.xlsx`);
-};
+    XLSX.writeFile(wb, `${data.name || "report"}.xlsx`);
+    showToast(`"${data.name || "Report"}" downloaded successfully`, "success");
+  };
 
   const toggleRow = (i) => setOpenRow(openRow === i ? null : i);
   const totalPages = Math.ceil(entries.length / perPage);
@@ -154,6 +176,159 @@ const handleDownload = (data) => {
 
   return (
     <div className="min-h-screen bg-[#f1f1f1]">
+
+      {/* ── PREMIUM UI CSS ───────────────────────── */}
+      <style>{`
+        @keyframes toast-in {
+          from { opacity: 0; transform: translateX(60px) scale(0.95); }
+          to   { opacity: 1; transform: translateX(0)     scale(1);   }
+        }
+        @keyframes toast-shrink {
+          from { width: 100%; }
+          to   { width: 0%; }
+        }
+        .wc-toast { animation: toast-in 0.32s cubic-bezier(0.34, 1.3, 0.64, 1) forwards; }
+        .wc-toast-bar { animation: toast-shrink 3.8s linear forwards; }
+
+        @keyframes row-expand {
+          from { opacity: 0; transform: translateY(-6px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        .wr-expand-row { animation: row-expand 0.22s ease forwards; }
+
+        .wr-body-row { transition: background-color 0.15s ease; }
+        .wr-body-row:hover { background-color: #eef6fb !important; }
+
+        .wr-toggle-btn {
+          transition: transform 0.18s cubic-bezier(0.34,1.4,0.64,1), background-color 0.15s ease;
+        }
+        .wr-toggle-btn:hover { transform: scale(1.15); background-color: #3ea862 !important; }
+        .wr-toggle-btn:active { transform: scale(0.92); }
+
+        .wr-download-btn {
+          transition: transform 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+        }
+        .wr-download-btn:hover:not(:disabled) {
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px #20A8D855;
+          background-color: #1b8db8;
+        }
+        .wr-download-btn:active:not(:disabled) { transform: translateY(0) scale(0.97); }
+
+        .wr-refresh-btn {
+          transition: transform 0.15s ease, background-color 0.15s ease;
+        }
+        .wr-refresh-btn:hover { background-color: #e2e8ee !important; }
+        .wr-refresh-btn:active { transform: scale(0.96); }
+        .wr-refresh-spin { animation: wr-spin 0.7s linear; }
+        @keyframes wr-spin { to { transform: rotate(360deg); } }
+
+        .wr-filter-pill {
+          transition: transform 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+        }
+        .wr-filter-pill:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 4px 14px #4DBD7455;
+          background-color: #3ea862 !important;
+        }
+
+        @keyframes wr-dropdown-in {
+          from { opacity: 0; transform: translateY(-6px) scale(0.97); }
+          to   { opacity: 1; transform: translateY(0)     scale(1);   }
+        }
+        .wr-dropdown { animation: wr-dropdown-in 0.16s ease forwards; transform-origin: top right; }
+        .wr-dropdown-item { transition: background-color 0.12s ease, padding-left 0.12s ease; }
+        .wr-dropdown-item:hover { padding-left: 20px; }
+
+        .wr-stat-pill {
+          transition: transform 0.15s ease;
+          border-radius: 6px;
+        }
+        .wr-stat-pill:hover { transform: scale(1.05); }
+
+        .wr-input {
+          transition: border-color 0.18s ease, box-shadow 0.18s ease;
+        }
+        .wr-input:focus {
+          border-color: #20A8D8 !important;
+          box-shadow: 0 0 0 3px #20A8D822;
+          outline: none;
+        }
+
+        .wr-page-btn {
+          transition: transform 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+        }
+        .wr-page-btn:hover:not(:disabled) {
+          background-color: #20A8D8 !important;
+          color: #fff !important;
+          border-color: #20A8D8 !important;
+          box-shadow: 0 3px 10px #20A8D844;
+        }
+        .wr-page-btn:active:not(:disabled) { transform: scale(0.96); }
+
+        @keyframes wr-pulse-soft {
+          0%,100% { opacity: 1; }
+          50%     { opacity: 0.55; }
+        }
+        .wr-pending-badge { animation: wr-pulse-soft 1.8s ease-in-out infinite; }
+
+        @keyframes wr-loading-shimmer {
+          0%   { opacity: 0.4; }
+          50%  { opacity: 0.9; }
+          100% { opacity: 0.4; }
+        }
+        .wr-loading-dot { animation: wr-loading-shimmer 1.1s ease-in-out infinite; }
+      `}</style>
+
+      {/* ══════════════════════════════════════════ */}
+      {/* 🔔 TOAST STACK                             */}
+      {/* ══════════════════════════════════════════ */}
+      <div className="fixed top-5 right-5 z-[70] flex flex-col gap-2.5 w-[320px] max-w-[90vw]">
+        {toasts.map((t) => {
+          const style = TOAST_STYLES[t.type] || TOAST_STYLES.error;
+          return (
+            <div
+              key={t.id}
+              className="wc-toast"
+              style={{
+                background: style.bg,
+                border: `1px solid ${style.accent}33`,
+                borderLeft: `4px solid ${style.accent}`,
+                borderRadius: 12,
+                boxShadow: `0 10px 30px rgba(0,0,0,0.12), 0 0 0 4px ${style.ring}`,
+                padding: "12px 14px",
+                display: "flex",
+                alignItems: "flex-start",
+                gap: 10,
+                position: "relative",
+                overflow: "hidden",
+              }}
+            >
+              <div style={{
+                width: 22, height: 22, borderRadius: "50%",
+                background: style.accent, color: "#fff",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: 12, fontWeight: 800, flexShrink: 0, marginTop: 1,
+              }}>{style.icon}</div>
+              <div style={{ flex: 1, fontSize: 13, color: "#2b3948", lineHeight: 1.4, fontWeight: 500 }}>
+                {t.message}
+              </div>
+              <button
+                onClick={() => dismissToast(t.id)}
+                style={{
+                  background: "transparent", border: "none", cursor: "pointer",
+                  color: "#9aa5b1", fontSize: 15, lineHeight: 1, padding: 0, flexShrink: 0,
+                }}
+              >✕</button>
+              <div style={{
+                position: "absolute", bottom: 0, left: 0, height: 3,
+                background: style.accent, opacity: 0.55,
+              }} className="wc-toast-bar" />
+            </div>
+          );
+        })}
+      </div>
+
       <div className="bg-gray-200">
         <marquee className="text-red-600 py-2 font-normal text-[18px]">
           NOTE = All campaigns will be delivered Between 8A.M to 6P.M - (Monday to Saturday) on working days.
@@ -170,12 +345,12 @@ const handleDownload = (data) => {
               {/* 🔥 Manual refresh button */}
               <button
                 onClick={fetchCampaigns}
-                className="bg-gray-100 hover:bg-gray-200 border border-gray-300 text-gray-600 px-3 py-1 rounded text-sm flex items-center gap-1"
+                className="wr-refresh-btn bg-gray-100 border border-gray-300 text-gray-600 px-3 py-1 rounded text-sm flex items-center gap-1"
               >
-                🔄 Refresh
+                <span className={loading ? "wr-refresh-spin inline-block" : "inline-block"}>🔄</span> Refresh
               </button>
               {allEntries.some((e) => e.status === "pending") && (
-                <span className="bg-orange-100 text-orange-600 border border-orange-300 px-3 py-1 rounded text-xs animate-pulse">
+                <span className="wr-pending-badge bg-orange-100 text-orange-600 border border-orange-300 px-3 py-1 rounded text-xs">
                   ⏳ Your Pending Campaign Auto-Refresh
                 </span>
               )}
@@ -184,15 +359,15 @@ const handleDownload = (data) => {
             <div className="relative">
               <div
                 onClick={() => setFilterOpen(!filterOpen)}
-                className="flex items-center gap-2 bg-[#4DBD74] text-white px-4 py-2 rounded cursor-pointer"
+                className="wr-filter-pill flex items-center gap-2 bg-[#4DBD74] text-white px-4 py-2 rounded cursor-pointer"
               >
                 <Calendar size={16} /> {selectedFilter}
               </div>
               {filterOpen && (
-                <div className="absolute right-0 mt-2 w-52 bg-white border border-gray-300 rounded shadow z-50">
+                <div className="wr-dropdown absolute right-0 mt-2 w-52 bg-white border border-gray-300 rounded shadow-lg z-50 overflow-hidden">
                   {filters.map((f, i) => (
                     <div key={i} onClick={() => { setSelectedFilter(f); setFilterOpen(false); setShowCustom(f === "Custom Range"); }}
-                      className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm">
+                      className="wr-dropdown-item px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm">
                       {f}
                     </div>
                   ))}
@@ -206,17 +381,17 @@ const handleDownload = (data) => {
             <div className="px-4 py-3 flex gap-3 items-center border-b bg-gray-50">
               <label className="text-sm">From:</label>
               <input type="date" value={customStart} onChange={(e) => setCustomStart(e.target.value)}
-                className="border border-gray-300 px-2 py-1 rounded outline-none text-sm" />
+                className="wr-input border border-gray-300 px-2 py-1 rounded outline-none text-sm" />
               <label className="text-sm">To:</label>
               <input type="date" value={customEnd} onChange={(e) => setCustomEnd(e.target.value)}
-                className="border border-gray-300 px-2 py-1 rounded outline-none text-sm" />
+                className="wr-input border border-gray-300 px-2 py-1 rounded outline-none text-sm" />
             </div>
           )}
 
           <div className="p-4">
             <div className="mb-3 flex items-center gap-2 text-sm">
               <span>Show</span>
-              <select className="border border-gray-300 px-2 py-1 rounded outline-none"
+              <select className="wr-input border border-gray-300 px-2 py-1 rounded outline-none"
                 value={perPage} onChange={(e) => { setPerPage(Number(e.target.value)); setPage(1); }}>
                 <option value={10}>10</option>
                 <option value={25}>25</option>
@@ -243,7 +418,9 @@ const handleDownload = (data) => {
                 <tbody>
                   {loading ? (
                     <tr>
-                      <td colSpan="7" className="py-6 text-gray-500">⏳ Loading...</td>
+                      <td colSpan="7" className="py-6 text-gray-500">
+                        <span className="wr-loading-dot">⏳</span> Loading...
+                      </td>
                     </tr>
                   ) : paginated.length === 0 ? (
                     <tr>
@@ -252,10 +429,10 @@ const handleDownload = (data) => {
                   ) : (
                     paginated.map((e, i) => (
                       <React.Fragment key={i}>
-                        <tr className="border-t bg-gray-200">
+                        <tr className="wr-body-row border-t bg-gray-200">
                           <td className="border-r border-gray-300">
                             <button onClick={() => toggleRow(i)}
-                              className="bg-[#4dbd74] text-white w-5 h-6 rounded-full">
+                              className="wr-toggle-btn bg-[#4dbd74] text-white w-5 h-6 rounded-full">
                               {openRow === i ? "-" : "+"}
                             </button>
                           </td>
@@ -266,7 +443,7 @@ const handleDownload = (data) => {
                           {/* 🔥 STATUS BADGE */}
                           <td className="px-3 py-2 border-r border-gray-300">
                             {e.status === "pending" ? (
-                              <span className="bg-orange-400 text-white px-2 py-1 text-xs rounded-full animate-pulse">
+                              <span className="wr-pending-badge bg-orange-400 text-white px-2 py-1 text-xs rounded-full">
                                 ⏳ PENDING
                               </span>
                             ) : (
@@ -281,7 +458,7 @@ const handleDownload = (data) => {
                             {(e.status === "completed" || role === "admin") ? (
                               <button
                                 onClick={() => handleDownload(e)}
-                                className="bg-[#20A8D8] text-white px-3 py-1 rounded-full text-xs"
+                                className="wr-download-btn bg-[#20A8D8] text-white px-3 py-1 rounded-full text-xs"
                               >
                                 Download
                               </button>
@@ -298,7 +475,7 @@ const handleDownload = (data) => {
 
                         {/* EXPANDED ROW */}
                         {openRow === i && (
-                          <tr>
+                          <tr className="wr-expand-row">
                             <td colSpan="7" className="bg-gray-100">
                               <div className="p-3 text-left">
 
@@ -309,7 +486,7 @@ const handleDownload = (data) => {
                                     <div className="flex gap-2 mt-1 flex-wrap">
                                       {e.file_urls.map((url, fi) => (
                                         <a key={fi} href={url} target="_blank" rel="noreferrer"
-                                          className="text-blue-500 text-xs underline">
+                                          className="text-blue-500 text-xs underline hover:text-blue-700 transition-colors duration-150">
                                           File {fi + 1}
                                         </a>
                                       ))}
@@ -319,11 +496,11 @@ const handleDownload = (data) => {
 
                                 {/* Stats */}
                                 <div className="flex gap-2 mt-2 flex-wrap justify-center">
-                                  <span className="bg-[#20A8D8] text-white px-3 py-1">TOTAL {e.total || 0}</span>
-                                  <span className="bg-[#F86C6B] text-white px-3 py-1">NONWA {e.nonwa || 0}</span>
-                                  <span className="bg-gray-500 text-white px-3 py-1">FAILED {e.failed || 0}</span>
-                                  <span className="bg-orange-400 text-white px-3 py-1">REJECTED {e.rejected || 0}</span>
-                                  <span className="bg-[#4DBD74] text-white px-3 py-1">SUCCESS {e.success || 0}</span>
+                                  <span className="wr-stat-pill bg-[#20A8D8] text-white px-3 py-1">TOTAL {e.total || 0}</span>
+                                  <span className="wr-stat-pill bg-[#F86C6B] text-white px-3 py-1">NONWA {e.nonwa || 0}</span>
+                                  <span className="wr-stat-pill bg-gray-500 text-white px-3 py-1">FAILED {e.failed || 0}</span>
+                                  <span className="wr-stat-pill bg-orange-400 text-white px-3 py-1">REJECTED {e.rejected || 0}</span>
+                                  <span className="wr-stat-pill bg-[#4DBD74] text-white px-3 py-1">SUCCESS {e.success || 0}</span>
                                 </div>
 
                                 {/* Pending message */}
@@ -350,9 +527,9 @@ const handleDownload = (data) => {
               </span>
               <div className="flex gap-2">
                 <button onClick={() => setPage((p) => Math.max(p - 1, 1))} disabled={page === 1}
-                  className="border px-3 py-1 hover:bg-gray-200 disabled:opacity-40">Previous</button>
+                  className="wr-page-btn border px-3 py-1 disabled:opacity-40">Previous</button>
                 <button onClick={() => setPage((p) => Math.min(p + 1, totalPages))} disabled={page === totalPages || totalPages === 0}
-                  className="border px-3 py-1 hover:bg-gray-200 disabled:opacity-40">Next</button>
+                  className="wr-page-btn border px-3 py-1 disabled:opacity-40">Next</button>
               </div>
             </div>
           </div>
