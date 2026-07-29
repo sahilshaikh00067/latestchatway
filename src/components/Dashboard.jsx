@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from "react";
 import { PieChart, Pie, Cell, Tooltip, Legend } from "recharts";
 
 const BASE = "https://latestchatway.onrender.com/api";
-const COLORS = ["#F86C6B", "#00E396", "#3B82F6", "#f97316"];
+const COLORS = ["#09e393", "#3b82f6", "#F86C6B", "#f97316"];
 const filters = ["Today", "Yesterday", "Last 7 Days", "Last 30 Days", "Custom Range"];
 
 const Dashboard = () => {
