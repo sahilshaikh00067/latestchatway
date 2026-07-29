@@ -14,6 +14,17 @@ const TOAST_STYLES = {
   info:    { icon: "ℹ", accent: "#20A8D8", bg: "linear-gradient(135deg, #f0f9fd, #ffffff)", ring: "#20A8D833" },
 };
 
+// ─────────────────────────────────────────────
+// 🆕 FILE TYPE HELPER — decides how to preview a file_url
+// ─────────────────────────────────────────────
+const getFileKind = (url) => {
+  const clean = (url || "").split("?")[0].toLowerCase();
+  if (/\.(jpg|jpeg|png|gif|webp|bmp)$/.test(clean)) return "image";
+  if (/\.(mp4|mov|webm|mkv|avi)$/.test(clean)) return "video";
+  if (/\.(pdf)$/.test(clean)) return "pdf";
+  return "file";
+};
+
 const WappReports = () => {
   const currentUser = JSON.parse(sessionStorage.getItem("user") || "null");
   const role = currentUser?.role?.toLowerCase();
@@ -29,6 +40,7 @@ const WappReports = () => {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
   const [toasts, setToasts] = useState([]);
+  const [lightboxUrl, setLightboxUrl] = useState(null); // 🆕 fullscreen image preview
   const intervalRef = useRef(null);
 
   const filters = ["Today", "Yesterday", "Last 7 Days", "Last 30 Days", "This Month", "Last Month", "Custom Range"];
@@ -278,6 +290,21 @@ const WappReports = () => {
           100% { opacity: 0.4; }
         }
         .wr-loading-dot { animation: wr-loading-shimmer 1.1s ease-in-out infinite; }
+
+        /* 🆕 File thumbnail preview */
+        .wr-file-thumb {
+          transition: transform 0.15s ease, box-shadow 0.15s ease;
+          cursor: pointer;
+        }
+        .wr-file-thumb:hover {
+          transform: scale(1.06);
+          box-shadow: 0 4px 14px rgba(0,0,0,0.18);
+        }
+        @keyframes wr-lightbox-in {
+          from { opacity: 0; }
+          to   { opacity: 1; }
+        }
+        .wr-lightbox { animation: wr-lightbox-in 0.18s ease forwards; }
       `}</style>
 
       {/* ══════════════════════════════════════════ */}
@@ -328,6 +355,28 @@ const WappReports = () => {
           );
         })}
       </div>
+
+      {/* ══════════════════════════════════════════ */}
+      {/* 🆕 IMAGE LIGHTBOX — click-to-zoom fullscreen */}
+      {/* ══════════════════════════════════════════ */}
+      {lightboxUrl && (
+        <div
+          className="wr-lightbox fixed inset-0 z-[80] flex items-center justify-center p-6"
+          style={{ backgroundColor: "rgba(0,0,0,0.82)" }}
+          onClick={() => setLightboxUrl(null)}
+        >
+          <img
+            src={lightboxUrl}
+            alt="preview"
+            className="max-w-[90vw] max-h-[90vh] rounded-lg shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          />
+          <button
+            onClick={() => setLightboxUrl(null)}
+            className="absolute top-5 right-6 text-white text-3xl leading-none"
+          >✕</button>
+        </div>
+      )}
 
       <div className="bg-gray-200">
         <marquee className="text-red-600 py-2 font-normal text-[18px]">
@@ -479,17 +528,54 @@ const WappReports = () => {
                             <td colSpan="7" className="bg-gray-100">
                               <div className="p-3 text-left">
 
-                                {/* Files */}
+                                {/* 🆕 Files — thumbnail preview instead of plain "File 1" links */}
                                 {(e.file_urls || []).length > 0 && (
                                   <div className="mb-3">
                                     <b>Files:</b>
-                                    <div className="flex gap-2 mt-1 flex-wrap">
-                                      {e.file_urls.map((url, fi) => (
-                                        <a key={fi} href={url} target="_blank" rel="noreferrer"
-                                          className="text-blue-500 text-xs underline hover:text-blue-700 transition-colors duration-150">
-                                          File {fi + 1}
-                                        </a>
-                                      ))}
+                                    <div className="flex gap-3 mt-2 flex-wrap justify-center">
+                                      {e.file_urls.map((url, fi) => {
+                                        const kind = getFileKind(url);
+
+                                        if (kind === "image") {
+                                          return (
+                                            <img
+                                              key={fi}
+                                              src={url}
+                                              alt={`file-${fi + 1}`}
+                                              onClick={() => setLightboxUrl(url)}
+                                              className="wr-file-thumb w-[80px] h-[80px] object-cover rounded border border-gray-300 bg-white"
+                                            />
+                                          );
+                                        }
+
+                                        if (kind === "video") {
+                                          return (
+                                            <a key={fi} href={url} target="_blank" rel="noreferrer"
+                                              className="wr-file-thumb flex flex-col items-center justify-center w-[80px] h-[80px] rounded border border-gray-300 bg-white text-gray-500">
+                                              <span className="text-2xl">🎬</span>
+                                              <span className="text-[10px] mt-1">Video</span>
+                                            </a>
+                                          );
+                                        }
+
+                                        if (kind === "pdf") {
+                                          return (
+                                            <a key={fi} href={url} target="_blank" rel="noreferrer"
+                                              className="wr-file-thumb flex flex-col items-center justify-center w-[80px] h-[80px] rounded border border-gray-300 bg-white text-gray-500">
+                                              <span className="text-2xl">📄</span>
+                                              <span className="text-[10px] mt-1">PDF</span>
+                                            </a>
+                                          );
+                                        }
+
+                                        return (
+                                          <a key={fi} href={url} target="_blank" rel="noreferrer"
+                                            className="wr-file-thumb flex flex-col items-center justify-center w-[80px] h-[80px] rounded border border-gray-300 bg-white text-gray-500">
+                                            <span className="text-2xl">📎</span>
+                                            <span className="text-[10px] mt-1">File {fi + 1}</span>
+                                          </a>
+                                        );
+                                      })}
                                     </div>
                                   </div>
                                 )}

@@ -5,6 +5,8 @@ import time
 import uuid
 import csv
 import json
+import os
+import mimetypes
 import threading
 from collections import Counter, defaultdict
 from datetime import timedelta, datetime
@@ -60,6 +62,15 @@ RETRY_TOKEN_SHIFT  = 3           # how many tokens to shift per retry round
 
 
 # ─────────────────────────────────────────
+# 🆕 SUPABASE STORAGE CONFIG — primary file host now (catbox/chatway kept
+# only as fallback). Set these two in Render → Environment.
+# ─────────────────────────────────────────
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
+SUPABASE_SERVICE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
+SUPABASE_BUCKET = "campaign-media"
+
+
+# ─────────────────────────────────────────
 # 🔥 SHARED HTTP SESSION — connection pooling = much faster bulk sends
 # ─────────────────────────────────────────
 _session = requests.Session()
@@ -88,7 +99,7 @@ UPLOAD_EXECUTOR = ThreadPoolExecutor(max_workers=MAX_WORKERS_UPLOAD, thread_name
 SCHEDULER_EXECUTOR = ThreadPoolExecutor(max_workers=2, thread_name_prefix="wapp-scheduler")
 
 TEXT_TIMEOUT = (3, 5)    # (connect, read)
-FILE_TIMEOUT = (3, 8)
+FILE_TIMEOUT = (5, 20)   # 🆕 was (3, 8) — bumped up, image/video uploads need more time on Render
 ADMIN_TIMEOUT = (3, 4)
 
 
@@ -828,16 +839,57 @@ def delete_user(request):
 # ─────────────────────────────────────────
 # FILE UPLOAD HELPERS
 # ─────────────────────────────────────────
+def upload_to_supabase(file):
+    """
+    🆕 PRIMARY UPLOAD PATH — Supabase Storage. Free, fast, reliable public
+    URL. Requires SUPABASE_URL + SUPABASE_SERVICE_KEY env vars on Render,
+    and a PUBLIC bucket named "campaign-media" created in Supabase Storage.
+    """
+    try:
+        if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
+            logger.error("Supabase upload skipped — SUPABASE_URL / SUPABASE_SERVICE_KEY not set")
+            return None, None
+
+        file.seek(0)
+        content = file.read()
+        safe_name = re.sub(r"[^a-zA-Z0-9._-]", "_", file.name)
+        path = f"{uuid.uuid4().hex}_{safe_name}"
+        content_type = file.content_type or mimetypes.guess_type(file.name)[0] or "application/octet-stream"
+
+        url = f"{SUPABASE_URL}/storage/v1/object/{SUPABASE_BUCKET}/{path}"
+        headers = {
+            "Authorization": f"Bearer {SUPABASE_SERVICE_KEY}",
+            "apikey": SUPABASE_SERVICE_KEY,
+            "Content-Type": content_type,
+        }
+        res = _session.post(url, headers=headers, data=content, timeout=FILE_TIMEOUT)
+
+        if res.status_code in (200, 201):
+            public_url = f"{SUPABASE_URL}/storage/v1/object/public/{SUPABASE_BUCKET}/{path}"
+            return public_url, file.name
+
+        logger.error("Supabase upload failed (status=%s): %s", res.status_code, res.text[:300])
+        return None, None
+    except Exception as e:
+        logger.error("Supabase upload error: %s", e)
+        return None, None
+
+
 def upload_to_chatway(file, token):
     try:
         file.seek(0)
         url   = f"https://int.chatway.in/api/file-upload?username={USERNAME}&token={token}"
         files = {"file": (file.name, file.read(), file.content_type or "application/octet-stream")}
         res   = _session.post(url, files=files, timeout=FILE_TIMEOUT)
-        data  = res.json()
+        try:
+            data = res.json()
+        except ValueError:
+            logger.error("Chatway upload non-JSON (status=%s): %s", res.status_code, res.text[:300])
+            return None, None
         if data.get("status") == "success":
             file_url = data.get("url") or data.get("file_url") or data.get("link")
             return file_url, file.name
+        logger.error("Chatway upload rejected: %s", data)
         return None, None
     except Exception as e:
         logger.error("Chatway upload error: %s", e)
@@ -852,6 +904,7 @@ def upload_to_catbox(file):
                                files=files, data={"reqtype": "fileupload", "userhash": ""}, timeout=FILE_TIMEOUT)
         if res.status_code == 200 and res.text.startswith("https://"):
             return res.text.strip(), file.name
+        logger.error("Catbox upload failed (status=%s): %s", res.status_code, res.text[:300])
         return None, None
     except Exception as e:
         logger.error("Catbox error: %s", e)
@@ -859,9 +912,17 @@ def upload_to_catbox(file):
 
 
 def upload_file(file):
+    """
+    🆕 Fallback chain: Supabase (primary) -> Chatway -> Catbox (last resort)
+    """
+    url, name = upload_to_supabase(file)
+    if url:
+        return url, name
+
     url, name = upload_to_chatway(file, TOKENS[0])
     if url:
         return url, name
+
     return upload_to_catbox(file)
 
 
@@ -957,10 +1018,19 @@ def send_all_files_to_number(args):
         results.append(send_single_file((number, "", file_url, file_name, (token_index + i) % TOKEN_COUNT)))
 
     statuses = [r["status"] for r in results]
-    if "success" in statuses:    final = "success"
-    elif "nonwa" in statuses:    final = "nonwa"
-    elif "rejected" in statuses: final = "rejected"
-    else:                        final = "failed"
+
+    # 🆕 FIX: pehle "success" in statuses tha — matlab agar text chala gaya
+    # but image fail ho gayi, phir bhi poora number "success" maan liya
+    # jaata tha (image silently missing rehti thi, retry bhi trigger nahi
+    # hota tha). Ab TEXT + HAR FILE, sabka success chahiye tabhi "success".
+    if statuses and all(s == "success" for s in statuses):
+        final = "success"
+    elif "nonwa" in statuses:
+        final = "nonwa"
+    elif "rejected" in statuses:
+        final = "rejected"
+    else:
+        final = "failed"
 
     _bump_progress(job_id, final)
     return {"status": final}
@@ -1436,3 +1506,13 @@ def send_whatsapp(request):
 # Optional: also wire an external cron (Render Cron Job / cron-job.org) to
 # hit /run-scheduled-campaigns/ every 1-2 minutes so scheduled sends fire
 # even if nobody is actively loading `my_campaigns` at that moment.
+#
+# ═════════════════════════════════════════════════════════════════════════
+# 📌 SUPABASE STORAGE SETUP (required for image/video upload to work)
+# ═════════════════════════════════════════════════════════════════════════
+# 1. Supabase dashboard → Storage → New bucket → name "campaign-media" → PUBLIC ✅
+# 2. Project Settings → API Keys → copy Project URL + service_role (secret) key
+# 3. Render → your backend service → Environment → add:
+#       SUPABASE_URL=https://xxxxx.supabase.co
+#       SUPABASE_SERVICE_KEY=sb_secret_xxxxxxxxxxxx
+# 4. Save → Render auto-redeploys. Done.
