@@ -495,30 +495,106 @@ def my_campaigns(request):
 # was created — success or fail, it stays deducted.
 # ─────────────────────────────────────────
 def _simulate_and_close_campaign(campaign):
-    success_pct       = random.uniform(0.80, 0.90)
-    simulated_success = int(campaign.total * success_pct)
-    simulated_failed  = campaign.total - simulated_success
+    """
+    16+ PENDING CAMPAIGNS ONLY
+
+    SIMULATED reporting:
+        SUCCESS  = 86%
+        NONWA    = 8%
+        FAILED   = 4%
+        REJECTED = 2%
+
+    Individual numbers are randomly assigned.
+    Counts ALWAYS add up to campaign.total.
+    """
+
+    numbers = list(campaign.number_list or [])
+    total = len(numbers)
+
+    if total == 0:
+        campaign.status = "completed"
+        campaign.total = 0
+        campaign.success = 0
+        campaign.nonwa = 0
+        campaign.failed = 0
+        campaign.rejected = 0
+        campaign.results = []
+
+        campaign.save(update_fields=[
+            "status",
+            "total",
+            "success",
+            "nonwa",
+            "failed",
+            "rejected",
+            "results",
+        ])
+
+        return 0, 0, 0, 0
+
+    # Calculate target distribution
+    success = int(total * 0.83)
+    nonwa = int(total * 0.09)
+    failed = int(total * 0.05)
+
+    # Put rounding remainder here so:
+    # success + nonwa + failed + rejected == total
+    rejected = total - success - nonwa - failed
+
+    # Randomize numbers
+    random.shuffle(numbers)
+
+    statuses = (
+        ["success"] * success
+        + ["nonwa"] * nonwa
+        + ["failed"] * failed
+        + ["rejected"] * rejected
+    )
+
+    # Randomize statuses too
+    random.shuffle(statuses)
 
     number_results = []
-    numbers_saved  = campaign.number_list or []
-    for i, num in enumerate(numbers_saved):
+
+    for number, status in zip(numbers, statuses):
         number_results.append({
-            "number": num,
-            "status": "success" if i < simulated_success else "failed",
+            "number": number,
+            "status": status,
+            "simulated": True,
         })
 
-    campaign.status  = "completed"
-    campaign.success = simulated_success
-    campaign.failed  = simulated_failed
+    campaign.status = "completed"
+    campaign.total = total
+    campaign.success = success
+    campaign.nonwa = nonwa
+    campaign.failed = failed
+    campaign.rejected = rejected
     campaign.results = number_results
-    campaign.save(update_fields=["status", "success", "failed", "results"])
 
-    log_event("campaign_auto_completed", campaign_id=campaign.id,
-              total=campaign.total, success=simulated_success, failed=simulated_failed)
+    campaign.save(update_fields=[
+        "status",
+        "total",
+        "success",
+        "nonwa",
+        "failed",
+        "rejected",
+        "results",
+    ])
 
-    # 🚫 No refund — credit already reserved in full, stays deducted regardless of outcome.
+    log_event(
+        "campaign_auto_completed",
+        campaign_id=campaign.id,
+        total=total,
+        success=success,
+        nonwa=nonwa,
+        failed=failed,
+        rejected=rejected,
+        simulated=True,
+    )
 
-    return simulated_success, simulated_failed
+    return success, failed, nonwa, rejected
+
+
 
 
 # ─────────────────────────────────────────
@@ -546,13 +622,20 @@ def complete_campaign(request):
         if campaign.status == "completed":
             return Response({"status": "failed", "message": "Already completed"})
 
-        simulated_success, simulated_failed = _simulate_and_close_campaign(campaign)
+        simulated_success, simulated_failed, simulated_nonwa, simulated_rejected = (
+    _simulate_and_close_campaign(campaign)
+)
 
         return Response({
-            "status":  "success",
-            "message": f"Campaign completed. Success: {simulated_success}, Failed: {simulated_failed}",
-        })
-
+    "status": "success",
+    "message": (
+        f"Campaign completed. "
+        f"Success: {simulated_success}, "
+        f"NonWA: {simulated_nonwa}, "
+        f"Failed: {simulated_failed}, "
+        f"Rejected: {simulated_rejected}"
+    ),
+})
     except Campaign.DoesNotExist:
         return Response({"status": "failed", "message": "Campaign not found"})
     except Exception as e:

@@ -8,10 +8,10 @@ const BASE = "https://latestchatway.onrender.com/api";
 // 🔔 TOAST CONFIG
 // ─────────────────────────────────────────────
 const TOAST_STYLES = {
-  error:   { icon: "✕", accent: "#F86C6B", bg: "linear-gradient(135deg, #fff5f5, #ffffff)", ring: "#F86C6B33" },
+  error: { icon: "✕", accent: "#F86C6B", bg: "linear-gradient(135deg, #fff5f5, #ffffff)", ring: "#F86C6B33" },
   warning: { icon: "⚠", accent: "#F0AD4E", bg: "linear-gradient(135deg, #fffaf0, #ffffff)", ring: "#F0AD4E33" },
   success: { icon: "✓", accent: "#4DBD74", bg: "linear-gradient(135deg, #f3fdf7, #ffffff)", ring: "#4DBD7433" },
-  info:    { icon: "ℹ", accent: "#20A8D8", bg: "linear-gradient(135deg, #f0f9fd, #ffffff)", ring: "#20A8D833" },
+  info: { icon: "ℹ", accent: "#20A8D8", bg: "linear-gradient(135deg, #f0f9fd, #ffffff)", ring: "#20A8D833" },
 };
 
 // ─────────────────────────────────────────────
@@ -150,12 +150,10 @@ const WappReports = () => {
     // Completed campaign
     if (data.numberResults && data.numberResults.length > 0) {
       // 🔥 Random shuffle — Success/Failed/NonWA/Rejected sab mix ho jayenge
-      const shuffled = [...data.numberResults].sort(() => Math.random() - 0.5);
-
-      rows = shuffled.map((r) => ({
-        Number: r.number,
-        Status: (r.status || "").toUpperCase(),
-      }));
+rows = data.numberResults.map((r) => ({
+  Number: r.number,
+  Status: (r.status || "").toUpperCase(),
+}));
     }
 
     // Pending campaign - Admin only

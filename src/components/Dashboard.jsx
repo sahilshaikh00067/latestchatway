@@ -93,10 +93,11 @@ const Dashboard = () => {
   const hasPending = allCampaigns.some((c) => c.status === "pending");
 
   const pieData = [
-    { name: "Failed", value: stats.failed },
-    { name: "Success", value: stats.success },
-    { name: "NonWA", value: stats.nonwa },
-    ];
+  { name: "Success", value: stats.success },
+  { name: "NonWA", value: stats.nonwa },
+  { name: "Failed", value: stats.failed },
+  { name: "Rejected", value: stats.rejected },
+];
 
   // Helper: readable label for the date-range pill
   const rangeLabel = () => {
@@ -109,23 +110,34 @@ const Dashboard = () => {
     return selectedFilter;
   };
 
-  const summaryRows = [
-    {
-      label: "Total",
-      value: stats.total,
-      color: "text-black",
-    },
-    {
-      label: "NONWA",
-      value: stats.nonwa,
-      color: "text-black",
-    },
-    {
-      label: "ACTIVEWA",
-      value: stats.success,
-      color: "text-black",
-    },
-  ];
+const summaryRows = [
+  {
+    label: "Total",
+    value: stats.total,
+    color: "text-black",
+  },
+  {
+    label: "SUCCESS",
+    value: stats.success,
+    color: "text-black",
+  },
+  {
+    label: "NONWA",
+    value: stats.nonwa,
+    color: "text-black",
+  },
+  {
+    label: "FAILED",
+    value: stats.failed,
+    color: "text-black",
+  },
+  {
+    label: "REJECTED",
+    value: stats.rejected,
+    color: "text-black",
+  },
+];
+
 
   return (
     <div className="min-h-screen bg-[#eef1f5]">
