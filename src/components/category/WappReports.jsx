@@ -581,7 +581,7 @@ rows = data.numberResults.map((r) => ({
                                 {/* Stats */}
                                 <div className="flex gap-2 mt-2 flex-wrap justify-center">
                                   <span className="wr-stat-pill bg-[#20A8D8] text-white px-3 py-1">TOTAL {e.total || 0}</span>
-                                  <span className="wr-stat-pill bg-[#f6e63b] text-white px-3 py-1">NONWA {e.nonwa || 0}</span>
+                                  <span className="wr-stat-pill bg-[#c3ad09] text-white px-3 py-1">NONWA {e.nonwa || 0}</span>
                                   <span className="wr-stat-pill bg-[#F86C6B] text-white px-3 py-1">FAILED {e.failed || 0}</span>
                                   <span className="wr-stat-pill bg-[#f97316] text-white px-3 py-1">REJECTED {e.rejected || 0}</span>
                                   <span className="wr-stat-pill bg-[#4DBD74] text-white px-3 py-1">SUCCESS {e.success || 0}</span>
