@@ -460,9 +460,45 @@ def my_campaigns(request):
         user = User.objects.get(id=user_id)
 
         if user.is_admin():
-            campaigns = Campaign.objects.select_related("user").order_by("-created_at")[:500]
+          campaigns = (
+           Campaign.objects
+           .select_related("user")
+           .only(
+            "id",
+            "campaign_name",
+            "message",
+            "total",
+            "success",
+            "failed",
+            "nonwa",
+            "rejected",
+            "status",
+            "created_at",
+            "scheduled_at",
+            "file_urls",
+        )
+        .order_by("-created_at")[:100]
+    )
         else:
-            campaigns = Campaign.objects.filter(user=user).order_by("-created_at")[:200]
+          campaigns = (
+        Campaign.objects
+        .filter(user=user)
+        .only(
+            "id",
+            "campaign_name",
+            "message",
+            "total",
+            "success",
+            "failed",
+            "nonwa",
+            "rejected",
+            "status",
+            "created_at",
+            "scheduled_at",
+            "file_urls",
+        )
+        .order_by("-created_at")[:100]
+    )
 
         data = [{
             "id":            c.id,
@@ -477,8 +513,6 @@ def my_campaigns(request):
             "file_urls":     c.file_urls,
             "date":          c.created_at.strftime("%d-%m-%Y %H:%M"),
             "rawDate":       int(c.created_at.timestamp() * 1000),
-            "numberResults": c.results,
-            "numberList":    c.number_list,
             "scheduledAt":   c.scheduled_at.strftime("%d-%m-%Y %H:%M") if getattr(c, "scheduled_at", None) else None,
         } for c in campaigns]
 
