@@ -39,7 +39,8 @@ const Dashboard = () => {
     const hasPending = allCampaigns.some((c) => c.status === "pending");
     clearInterval(intervalRef.current);
     if (hasPending) {
-intervalRef.current = setInterval(fetchCampaigns, 3000);    }
+      intervalRef.current = setInterval(fetchCampaigns, 60 * 1000);
+    }
     return () => clearInterval(intervalRef.current);
   }, [allCampaigns]);
 

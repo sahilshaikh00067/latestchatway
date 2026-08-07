@@ -91,7 +91,9 @@ const WappReports = () => {
 
     if (hasPending) {
       // Har 60 second mein check karo
-      setInterval(fetchCampaigns, 3000);
+      intervalRef.current = setInterval(() => {
+        fetchCampaigns();
+      }, 60 * 1000);
     } else {
       clearInterval(intervalRef.current);
     }
