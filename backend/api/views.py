@@ -452,17 +452,17 @@ def campaign_results_csv(request):
 # ─────────────────────────────────────────
 @api_view(['GET'])
 def my_campaigns(request):
-    auto_complete_pending_campaigns()
-    process_scheduled_campaigns()   # 🆕 fire any due scheduled campaigns while we're here
+    # auto_complete_pending_campaigns()
+    # process_scheduled_campaigns()   # 🆕 fire any due scheduled campaigns while we're here
 
     try:
         user_id = request.query_params.get("user_id")
         user = User.objects.get(id=user_id)
 
         if user.is_admin():
-            campaigns = Campaign.objects.select_related("user").order_by("-created_at")[:500]
+            campaigns = Campaign.objects.select_related("user").order_by("-created_at")[:200]
         else:
-            campaigns = Campaign.objects.filter(user=user).order_by("-created_at")[:200]
+            campaigns = Campaign.objects.filter(user=user).order_by("-created_at")[:100]
 
         data = [{
             "id":            c.id,
