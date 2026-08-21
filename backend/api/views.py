@@ -459,9 +459,9 @@ def my_campaigns(request):
         user = User.objects.get(id=user_id)
 
         if user.is_admin():
-            campaigns = Campaign.objects.select_related("user").order_by("-created_at")[:400]
+            campaigns = Campaign.objects.select_related("user").order_by("-created_at")[:150]
         else:
-            campaigns = Campaign.objects.filter(user=user).order_by("-created_at")[:200]
+            campaigns = Campaign.objects.filter(user=user).order_by("-created_at")[:100]
 
         data = [{
             "id":            c.id,
