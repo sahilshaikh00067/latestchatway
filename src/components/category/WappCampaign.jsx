@@ -1,18 +1,32 @@
 import React, { useState, useCallback } from "react";
 import { useDropzone } from "react-dropzone";
-import { FaComments } from "react-icons/fa";
+import {
+  FaComments,
+  FaTimes,
+  FaExclamationTriangle,
+  FaCheck,
+  FaInfoCircle,
+  FaImage,
+  FaVideo,
+  FaFilePdf,
+  FaPaperclip,
+  FaPaperPlane,
+  FaList,
+  FaPhoneAlt,
+  FaBroom,
+  FaRocket,
+} from "react-icons/fa";
 
-// ─────────────────────────────────────────────
-// 🔥 NUMBER VALIDATION HELPER
-// ─────────────────────────────────────────────
 function parseAndValidateNumbers(raw) {
   const lines = raw.split("\n").map((n) => n.trim()).filter(Boolean);
 
   const cleaned = lines.map((n) => {
     let digits = n.replace(/\D/g, "");
+
     if (digits.length === 12 && digits.startsWith("91")) {
       digits = digits.slice(2);
     }
+
     return digits;
   });
 
@@ -24,8 +38,16 @@ function parseAndValidateNumbers(raw) {
   let duplicateCount = 0;
 
   for (const n of cleaned) {
-    if (!isValid(n)) { invalidCount++; continue; }
-    if (seen.has(n)) { duplicateCount++; continue; }
+    if (!isValid(n)) {
+      invalidCount++;
+      continue;
+    }
+
+    if (seen.has(n)) {
+      duplicateCount++;
+      continue;
+    }
+
     seen.add(n);
     valid.push(n);
   }
@@ -33,133 +55,360 @@ function parseAndValidateNumbers(raw) {
   return { valid, invalidCount, duplicateCount };
 }
 
-// ─────────────────────────────────────────────
-// 🔥 TOAST CONFIG
-// ─────────────────────────────────────────────
 const TOAST_STYLES = {
-  error:   { icon: "✕", accent: "#F86C6B", bg: "linear-gradient(135deg, #fff5f5, #ffffff)", ring: "#F86C6B33" },
-  warning: { icon: "⚠", accent: "#F0AD4E", bg: "linear-gradient(135deg, #fffaf0, #ffffff)", ring: "#F0AD4E33" },
-  success: { icon: "✓", accent: "#4DBD74", bg: "linear-gradient(135deg, #f3fdf7, #ffffff)", ring: "#4DBD7433" },
-  info:    { icon: "ℹ", accent: "#20A8D8", bg: "linear-gradient(135deg, #f0f9fd, #ffffff)", ring: "#20A8D833" },
+  error: {
+    icon: <FaTimes />,
+    accent: "#F86C6B",
+    bg: "linear-gradient(135deg, #fff5f5, #ffffff)",
+    ring: "#F86C6B33",
+  },
+
+  warning: {
+    icon: <FaExclamationTriangle />,
+    accent: "#F0AD4E",
+    bg: "linear-gradient(135deg, #fffaf0, #ffffff)",
+    ring: "#F0AD4E33",
+  },
+
+  success: {
+    icon: <FaCheck />,
+    accent: "#4DBD74",
+    bg: "linear-gradient(135deg, #f3fdf7, #ffffff)",
+    ring: "#4DBD7433",
+  },
+
+  info: {
+    icon: <FaInfoCircle />,
+    accent: "#20A8D8",
+    bg: "linear-gradient(135deg, #f0f9fd, #ffffff)",
+    ring: "#20A8D833",
+  },
 };
 
 export default function WappCampaign() {
   const [campaignName, setCampaignName] = useState("");
   const [numbers, setNumbers] = useState("");
   const [message, setMessage] = useState("");
+
   const [showConfirm, setShowConfirm] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [files, setFiles] = useState({ images: [], video: null, pdf: null });
+
+  const [files, setFiles] = useState({
+    image: null,
+    video: null,
+    pdf: null,
+  });
+
   const [justCleaned, setJustCleaned] = useState(false);
   const [toasts, setToasts] = useState([]);
 
-  // 🔔 Premium toast — replaces alert()
   const showToast = useCallback((message, type = "error") => {
     const id = Date.now() + Math.random();
-    setToasts((prev) => [...prev, { id, message, type }]);
+
+    setToasts((prev) => [
+      ...prev,
+      { id, message, type },
+    ]);
+
     setTimeout(() => {
-      setToasts((prev) => prev.filter((t) => t.id !== id));
+      setToasts((prev) =>
+        prev.filter((t) => t.id !== id)
+      );
     }, 3800);
   }, []);
 
-  const dismissToast = (id) => setToasts((prev) => prev.filter((t) => t.id !== id));
+  const dismissToast = (id) => {
+    setToasts((prev) =>
+      prev.filter((t) => t.id !== id)
+    );
+  };
 
-  // 🔥 Live stats — recompute on every render from current `numbers` value
-  const { valid: validNumbersList, invalidCount, duplicateCount } = parseAndValidateNumbers(numbers);
+  const {
+    valid: validNumbersList,
+    invalidCount,
+    duplicateCount,
+  } = parseAndValidateNumbers(numbers);
+
   const validCount = validNumbersList.length;
 
-  // ─────────────────────────────────────────────
-  // 🔥 CLEAN NUMBERS — removes invalid + duplicate entries
-  // ─────────────────────────────────────────────
   const cleanNumbersField = useCallback(() => {
     setNumbers((prev) => {
-      const { valid } = parseAndValidateNumbers(prev);
+      const { valid } =
+        parseAndValidateNumbers(prev);
+
       const cleanedText = valid.join("\n");
+
       if (cleanedText !== prev.trim()) {
         setJustCleaned(true);
-        setTimeout(() => setJustCleaned(false), 1500);
+
+        setTimeout(() => {
+          setJustCleaned(false);
+        }, 1500);
       }
+
       return cleanedText;
     });
   }, []);
 
+  const getSelectedAttachment = () => {
+    if (files.image) return "image";
+    if (files.video) return "video";
+    if (files.pdf) return "pdf";
+
+    return null;
+  };
+
   const handleDrop = (acceptedFiles, type) => {
-    if (type === "image") {
-      const validImages = acceptedFiles.filter((f) => f.size <= 1 * 1024 * 1024);
-      if (validImages.length !== acceptedFiles.length) showToast("Each image must be under 1MB", "warning");
-      setFiles((prev) => ({ ...prev, images: [...prev.images, ...validImages].slice(0, 4) }));
+    const selectedType = getSelectedAttachment();
+
+    if (
+      selectedType &&
+      selectedType !== type
+    ) {
+      showToast(
+        "Only one attachment is allowed. Remove the current file first.",
+        "warning"
+      );
+
       return;
     }
+
     const file = acceptedFiles[0];
+
     if (!file) return;
-    const limits = { video: 3, pdf: 1 };
-    if (file.size > limits[type] * 1024 * 1024) { showToast(`${type[0].toUpperCase() + type.slice(1)} must be under ${limits[type]}MB`, "warning"); return; }
-    setFiles((prev) => ({ ...prev, [type]: file }));
+
+    const limits = {
+      image: 1,
+      video: 3,
+      pdf: 1,
+    };
+
+    if (
+      file.size >
+      limits[type] * 1024 * 1024
+    ) {
+      showToast(
+        `${
+          type[0].toUpperCase() +
+          type.slice(1)
+        } must be under ${
+          limits[type]
+        }MB`,
+        "warning"
+      );
+
+      return;
+    }
+
+    setFiles({
+      image:
+        type === "image"
+          ? file
+          : null,
+
+      video:
+        type === "video"
+          ? file
+          : null,
+
+      pdf:
+        type === "pdf"
+          ? file
+          : null,
+    });
   };
 
   const removeFile = (type) => {
-    setFiles((prev) => {
-      const updated = { ...prev };
-      if (type === "image") updated.images = [];
-      else updated[type] = null;
-      return updated;
-    });
+    setFiles((prev) => ({
+      ...prev,
+      [type]: null,
+    }));
   };
 
-  const UploadBox = ({ title, type, color }) => {
-    const { getRootProps, getInputProps, isDragActive } = useDropzone({
-      onDrop: (f) => handleDrop(f, type),
-      accept: type === "image" ? { "image/*": [] } : type === "video" ? { "video/*": [] } : { "application/pdf": [] },
-      maxFiles: type === "image" ? 4 : 1,
+  const UploadBox = ({
+    title,
+    type,
+    color,
+  }) => {
+    const selectedType =
+      getSelectedAttachment();
+
+    const isDisabled =
+      selectedType !== null &&
+      selectedType !== type;
+
+    const {
+      getRootProps,
+      getInputProps,
+      isDragActive,
+    } = useDropzone({
+      onDrop: (f) =>
+        handleDrop(f, type),
+
+      accept:
+        type === "image"
+          ? {
+              "image/*": [],
+            }
+          : type === "video"
+          ? {
+              "video/*": [],
+            }
+          : {
+              "application/pdf": [],
+            },
+
+      maxFiles: 1,
+
+      disabled: isDisabled,
     });
-    const file = type === "image" ? files.images : files[type];
-    const hasFile = type === "image" ? files.images.length > 0 : !!file;
+
+    const file = files[type];
+    const hasFile = !!file;
+
+    const Icon =
+      type === "image"
+        ? FaImage
+        : type === "video"
+        ? FaVideo
+        : FaFilePdf;
 
     return (
-      <div className="border border-gray-300 rounded overflow-hidden transition-shadow duration-200 hover:shadow-sm">
-        <div className={`${color} text-white px-4 py-2 text-[13px] font-semibold flex justify-between items-center`}>
-          <span>{title}</span>
+      <div
+        className={`border border-gray-300 rounded overflow-hidden transition-shadow duration-200 ${
+          isDisabled
+            ? "opacity-50 cursor-not-allowed"
+            : "hover:shadow-sm"
+        }`}
+      >
+        <div
+          className={`${color} text-white px-4 py-2 text-[13px] font-semibold flex justify-between items-center`}
+        >
+          <span className="flex items-center gap-2">
+            <Icon />
+            {title}
+          </span>
+
           {hasFile && (
-            <button onClick={(e) => { e.stopPropagation(); removeFile(type); }}
-              className="text-white text-xs bg-black bg-opacity-30 hover:bg-opacity-45 px-2 py-0.5 rounded transition-colors duration-150">✕ Remove</button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                removeFile(type);
+              }}
+              className="text-white text-xs bg-black bg-opacity-30 hover:bg-opacity-45 px-2 py-0.5 rounded transition-colors duration-150 flex items-center gap-1"
+            >
+              <FaTimes />
+              Remove
+            </button>
           )}
         </div>
-        <div {...getRootProps()} className={`text-center py-1 text-[13px] cursor-pointer transition-colors duration-200 ${isDragActive ? "bg-blue-50" : "bg-gray-100 hover:bg-gray-200"}`}>
+
+        <div
+          {...getRootProps()}
+          className={`text-center py-2 text-[13px] transition-colors duration-200 ${
+            isDisabled
+              ? "bg-gray-100 cursor-not-allowed"
+              : isDragActive
+              ? "bg-blue-50 cursor-pointer"
+              : "bg-gray-100 hover:bg-gray-200 cursor-pointer"
+          }`}
+        >
           <input {...getInputProps()} />
+
           {hasFile ? (
             <div className="flex flex-col items-center gap-2 px-3">
-              {type === "image" ? (
+              {type === "image" && (
                 <>
-                  <div className="flex flex-wrap gap-2 justify-center">
-                    {files.images.map((img, index) => (
-                      <img key={index} src={URL.createObjectURL(img)} alt="preview" className="w-[70px] h-[70px] object-cover rounded border transition-transform duration-200 hover:scale-105" />
-                    ))}
-                  </div>
-                  <span className="text-green-600 font-semibold text-[12px]">✅ {files.images.length} Images Selected</span>
+                  <img
+                    src={URL.createObjectURL(
+                      file
+                    )}
+                    alt="preview"
+                    className="w-[90px] h-[70px] object-cover rounded border transition-transform duration-200 hover:scale-105"
+                  />
+
+                  <span className="text-green-600 font-semibold text-[12px] flex items-center gap-1">
+                    <FaCheck />
+                    {file.name}
+                  </span>
+
+                  <span className="text-gray-400 text-[11px]">
+                    {(
+                      file.size / 1024
+                    ).toFixed(1)}{" "}
+                    KB
+                  </span>
                 </>
-              ) : type === "video" ? (
+              )}
+
+              {type === "video" && (
                 <>
-                  <video src={URL.createObjectURL(file)} className="w-[120px] h-[80px] object-cover rounded border" controls />
-                  <span className="text-green-600 font-semibold text-[12px] truncate max-w-[200px]">✅ {file.name}</span>
-                  <span className="text-gray-400 text-[11px]">{(file.size / 1024).toFixed(1)} KB</span>
+                  <video
+                    src={URL.createObjectURL(
+                      file
+                    )}
+                    className="w-[120px] h-[80px] object-cover rounded border"
+                    controls
+                  />
+
+                  <span className="text-green-600 font-semibold text-[12px] truncate max-w-[200px] flex items-center gap-1">
+                    <FaCheck />
+                    {file.name}
+                  </span>
+
+                  <span className="text-gray-400 text-[11px]">
+                    {(
+                      file.size / 1024
+                    ).toFixed(1)}{" "}
+                    KB
+                  </span>
                 </>
-              ) : (
+              )}
+
+              {type === "pdf" && (
                 <>
-                  <div className="text-4xl">📄</div>
-                  <span className="text-green-600 font-semibold text-[12px] truncate max-w-[200px]">✅ {file.name}</span>
-                  <span className="text-gray-400 text-[11px]">{(file.size / 1024).toFixed(1)} KB</span>
+                  <FaFilePdf className="text-4xl text-red-500" />
+
+                  <span className="text-green-600 font-semibold text-[12px] truncate max-w-[200px] flex items-center gap-1">
+                    <FaCheck />
+                    {file.name}
+                  </span>
+
+                  <span className="text-gray-400 text-[11px]">
+                    {(
+                      file.size / 1024
+                    ).toFixed(1)}{" "}
+                    KB
+                  </span>
                 </>
               )}
             </div>
           ) : (
             <div className="text-gray-500 px-3">
-              <div className="text-2xl mb-1">{type === "image" ? "🖼️" : type === "video" ? "🎬" : "📄"}</div>
-              Drag & Drop {type} file <br />
-              <span className="underline text-blue-500">Browse</span>
+              <Icon className="text-2xl mb-1 mx-auto" />
+
+              Drag & Drop {type} file
+
+              <br />
+
+              <span className="underline text-blue-500">
+                Browse
+              </span>
+
               <div className="text-xs text-gray-400 mt-1">
-                {type === "image" ? "Max 4 images • 1MB each" : type === "video" ? "Max 1 video • 3MB" : "Max 1 PDF • 1MB"}
+                {type === "image"
+                  ? "Max 1 Image • 1MB"
+                  : type === "video"
+                  ? "Max 1 Video • 3MB"
+                  : "Max 1 PDF • 1MB"}
               </div>
+
+              {isDisabled && (
+                <div className="text-red-400 text-[11px] mt-1">
+                  Remove current attachment first
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -171,215 +420,460 @@ export default function WappCampaign() {
     setLoading(true);
     setShowConfirm(false);
 
-    const currentUser = JSON.parse(sessionStorage.getItem("user"));
+    const currentUser = JSON.parse(
+      sessionStorage.getItem("user")
+    );
+
     const userId = currentUser?.id;
 
-    const numberList = [...new Set(numbers.split("\n").map((n) => n.trim()).filter((n) => n !== ""))];
-    if (numberList.length === 0) { showToast("Please enter numbers", "error"); setLoading(false); return; }
+    const numberList = [
+      ...new Set(
+        numbers
+          .split("\n")
+          .map((n) => n.trim())
+          .filter((n) => n !== "")
+      ),
+    ];
+
+    if (numberList.length === 0) {
+      showToast(
+        "Please enter numbers",
+        "error"
+      );
+
+      setLoading(false);
+      return;
+    }
 
     try {
       const formData = new FormData();
-      formData.append("message", message);
-      formData.append("user_id", userId);
-      formData.append("campaign_name", campaignName);
-      numberList.forEach((n) => formData.append("numbers", n));
-      files.images.forEach((img) => formData.append("images", img));
-      if (files.video) formData.append("video", files.video);
-      if (files.pdf) formData.append("pdf", files.pdf);
 
-      const res = await fetch("https://latestchatway.onrender.com/api/send-whatsapp/", { method: "POST", body: formData });
+      formData.append(
+        "message",
+        message
+      );
+
+      formData.append(
+        "user_id",
+        userId
+      );
+
+      formData.append(
+        "campaign_name",
+        campaignName
+      );
+
+      numberList.forEach((n) =>
+        formData.append("numbers", n)
+      );
+
+      if (files.image) {
+        formData.append(
+          "images",
+          files.image
+        );
+      }
+
+      if (files.video) {
+        formData.append(
+          "video",
+          files.video
+        );
+      }
+
+      if (files.pdf) {
+        formData.append(
+          "pdf",
+          files.pdf
+        );
+      }
+
+      const res = await fetch(
+        "https://latestchatway.onrender.com/api/send-whatsapp/",
+        {
+          method: "POST",
+          body: formData,
+        }
+      );
+
       const data = await res.json();
 
       if (data.status === "error") {
-        showToast(data.message || "Something went wrong", "error");
+        showToast(
+          data.message ||
+            "Something went wrong",
+          "error"
+        );
+
         setLoading(false);
         return;
       }
 
-      // ✅ Credit update karo (pending aur done dono mein)
-      if (data.credit_left !== undefined) {
-        const updatedUser = { ...currentUser, credit: data.credit_left };
-        sessionStorage.setItem("user", JSON.stringify(updatedUser));
+      if (
+        data.credit_left !== undefined
+      ) {
+        const updatedUser = {
+          ...currentUser,
+          credit:
+            data.credit_left,
+        };
+
+        sessionStorage.setItem(
+          "user",
+          JSON.stringify(updatedUser)
+        );
       }
 
-      // ✅ Bus success modal dikha — DB mein save ho chuka backend pe
       setShowSuccess(true);
+
       setCampaignName("");
       setNumbers("");
       setMessage("");
-      setFiles({ images: [], video: null, pdf: null });
 
+      setFiles({
+        image: null,
+        video: null,
+        pdf: null,
+      });
     } catch (err) {
-      console.log("ERROR:", err);
-      showToast("Server error — please try again", "error");
+      console.log(
+        "ERROR:",
+        err
+      );
+
+      showToast(
+        "Server error — please try again",
+        "error"
+      );
     }
+
     setLoading(false);
   };
 
   const handleSendClick = () => {
-    if (!campaignName || !numbers || !message) { showToast("Please fill all fields", "warning"); return; }
+    if (
+      !campaignName ||
+      !numbers ||
+      !message
+    ) {
+      showToast(
+        "Please fill all fields",
+        "warning"
+      );
+
+      return;
+    }
+
     setShowConfirm(true);
   };
 
+  const selectedAttachment =
+    getSelectedAttachment();
+
   return (
     <div className="min-h-screen bg-[#f1f1f1] relative">
-
-      {/* ── MODAL + TOAST CSS ───────────────────────── */}
       <style>{`
         @keyframes wc-backdrop-in {
           from { opacity: 0; }
-          to   { opacity: 1; }
+          to { opacity: 1; }
         }
+
         @keyframes wc-slide-up {
-          from { opacity: 0; transform: translateY(40px) scale(0.94); }
-          to   { opacity: 1; transform: translateY(0)    scale(1);    }
+          from {
+            opacity: 0;
+            transform: translateY(40px) scale(0.94);
+          }
+
+          to {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+          }
         }
+
         @keyframes wc-check-pop {
-          0%   { transform: scale(0) rotate(-15deg); }
-          65%  { transform: scale(1.25) rotate(6deg); }
-          100% { transform: scale(1)   rotate(0deg); }
+          0% {
+            transform: scale(0) rotate(-15deg);
+          }
+
+          65% {
+            transform: scale(1.25) rotate(6deg);
+          }
+
+          100% {
+            transform: scale(1) rotate(0deg);
+          }
         }
+
         @keyframes wc-pulse-ring {
-          0%,100% { box-shadow: 0 0 0 0   #4DBD7455, 0 6px 24px #4DBD7433; }
-          50%     { box-shadow: 0 0 0 10px transparent, 0 6px 24px #4DBD7455; }
+          0%,100% {
+            box-shadow:
+              0 0 0 0 #4DBD7455,
+              0 6px 24px #4DBD7433;
+          }
+
+          50% {
+            box-shadow:
+              0 0 0 10px transparent,
+              0 6px 24px #4DBD7455;
+          }
         }
+
         @keyframes wc-shimmer {
-          0%   { background-position: -300% center; }
-          100% { background-position:  300% center; }
+          0% {
+            background-position: -300% center;
+          }
+
+          100% {
+            background-position: 300% center;
+          }
         }
+
         @keyframes wc-spin {
-          to { transform: rotate(360deg); }
+          to {
+            transform: rotate(360deg);
+          }
         }
 
         .wc-backdrop {
           animation: wc-backdrop-in 0.22s ease forwards;
         }
+
         .wc-modal {
-          animation: wc-slide-up 0.38s cubic-bezier(0.34, 1.3, 0.64, 1) forwards;
-        }
-        .wc-check-icon {
-          animation: wc-check-pop 0.45s cubic-bezier(0.34, 1.5, 0.64, 1) forwards,
-                     wc-pulse-ring 2.2s ease-in-out 0.45s infinite;
+          animation: wc-slide-up 0.38s cubic-bezier(
+            0.34,
+            1.3,
+            0.64,
+            1
+          ) forwards;
         }
 
-        /* Send button — shimmer + hover lift */
+        .wc-check-icon {
+          animation:
+            wc-check-pop 0.45s cubic-bezier(
+              0.34,
+              1.5,
+              0.64,
+              1
+            ) forwards,
+            wc-pulse-ring 2.2s ease-in-out 0.45s infinite;
+        }
+
         .wc-btn-send {
           position: relative;
           overflow: hidden;
-          transition: transform 0.18s cubic-bezier(0.34,1.4,0.64,1),
-                      box-shadow 0.18s ease !important;
+
+          transition:
+            transform 0.18s cubic-bezier(
+              0.34,
+              1.4,
+              0.64,
+              1
+            ),
+            box-shadow 0.18s ease !important;
         }
+
         .wc-btn-send:hover:not(:disabled) {
           transform: translateY(-2px) scale(1.03) !important;
-          box-shadow: 0 8px 24px #20A8D866 !important;
+
+          box-shadow:
+            0 8px 24px #20A8D866 !important;
         }
+
         .wc-btn-send:active:not(:disabled) {
           transform: translateY(0) scale(0.98) !important;
         }
+
         .wc-btn-send::after {
           content: "";
-          position: absolute; inset: 0;
-          background: linear-gradient(
-            105deg,
-            transparent 40%,
-            rgba(255,255,255,0.22) 50%,
-            transparent 60%
-          );
+          position: absolute;
+          inset: 0;
+
+          background:
+            linear-gradient(
+              105deg,
+              transparent 40%,
+              rgba(255,255,255,0.22) 50%,
+              transparent 60%
+            );
+
           background-size: 300% 100%;
-          animation: wc-shimmer 2.8s infinite;
+
+          animation:
+            wc-shimmer 2.8s infinite;
+
           pointer-events: none;
         }
 
-        /* Cancel button */
         .wc-btn-cancel {
-          transition: transform 0.15s ease,
-                      box-shadow 0.15s ease,
-                      background  0.15s ease !important;
-        }
-        .wc-btn-cancel:hover {
-          transform: translateY(-1px) !important;
-          box-shadow: 0 5px 16px #F86C6B55 !important;
-          background: #e85555 !important;
-        }
-        .wc-btn-cancel:active {
-          transform: translateY(0) scale(0.98) !important;
+          transition:
+            transform 0.15s ease,
+            box-shadow 0.15s ease,
+            background 0.15s ease !important;
         }
 
-        /* OK / Send Another button */
-        .wc-btn-ok {
-          transition: transform 0.15s ease,
-                      box-shadow 0.15s ease !important;
+        .wc-btn-cancel:hover {
+          transform: translateY(-1px) !important;
+
+          box-shadow:
+            0 5px 16px #F86C6B55 !important;
+
+          background: #e85555 !important;
         }
+
+        .wc-btn-ok {
+          transition:
+            transform 0.15s ease,
+            box-shadow 0.15s ease !important;
+        }
+
         .wc-btn-ok:hover {
           transform: translateY(-2px) !important;
-          box-shadow: 0 8px 24px #20A8D866 !important;
-        }
-        .wc-btn-ok:active {
-          transform: translateY(0) scale(0.98) !important;
+
+          box-shadow:
+            0 8px 24px #20A8D866 !important;
         }
 
         .wc-spinner {
           display: inline-block;
-          width: 13px; height: 13px;
+
+          width: 13px;
+          height: 13px;
+
           border: 2px solid rgba(255,255,255,0.35);
           border-top-color: #fff;
+
           border-radius: 50%;
-          animation: wc-spin 0.7s linear infinite;
+
+          animation:
+            wc-spin 0.7s linear infinite;
         }
 
-        /* 🔥 Stats badges next to campaign name */
-        .camp-header-row { display: flex; align-items: center; flex-wrap: wrap; gap: 16px; }
-        .camp-stats-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; animation: statsFadeIn .25s ease; }
+        .camp-header-row {
+          display: flex;
+          align-items: center;
+          flex-wrap: wrap;
+          gap: 16px;
+        }
+
+        .camp-stats-row {
+          display: flex;
+          align-items: center;
+          flex-wrap: wrap;
+          gap: 8px;
+
+          animation:
+            statsFadeIn 0.25s ease;
+        }
+
         .camp-stat-badge {
-          display: inline-flex; align-items: center; color: #fff; font-size: 13px; font-weight: 500;
-          padding: 8px 14px; border-radius: 6px; white-space: nowrap;
-          box-shadow: 0 1px 3px rgba(0,0,0,.12);
-          transition: transform 0.2s ease;
-        }
-        .camp-stat-badge:hover { transform: scale(1.03); }
-        button.camp-stat-badge { cursor: pointer; border: none; }
-        @keyframes statsFadeIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
-        @media (max-width: 700px) {
-          .camp-header-row { flex-direction: column; align-items: stretch; }
+          display: inline-flex;
+          align-items: center;
+
+          color: #fff;
+          font-size: 13px;
+          font-weight: 500;
+
+          padding: 8px 14px;
+          border-radius: 6px;
+
+          white-space: nowrap;
+
+          box-shadow:
+            0 1px 3px rgba(0,0,0,.12);
+
+          transition:
+            transform 0.2s ease;
         }
 
-        /* Smoother input focus glow */
-        .wc-input, .wc-textarea {
-          transition: border-color 0.18s ease, box-shadow 0.18s ease;
+        .camp-stat-badge:hover {
+          transform: scale(1.03);
         }
-        .wc-input:focus, .wc-textarea:focus {
+
+        button.camp-stat-badge {
+          cursor: pointer;
+          border: none;
+        }
+
+        @keyframes statsFadeIn {
+          from {
+            opacity: 0;
+            transform: translateY(-4px);
+          }
+
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        @media (max-width: 700px) {
+          .camp-header-row {
+            flex-direction: column;
+            align-items: stretch;
+          }
+        }
+
+        .wc-input,
+        .wc-textarea {
+          transition:
+            border-color 0.18s ease,
+            box-shadow 0.18s ease;
+        }
+
+        .wc-input:focus,
+        .wc-textarea:focus {
           border-color: #20A8D8 !important;
-          box-shadow: 0 0 0 3px #20A8D822;
+
+          box-shadow:
+            0 0 0 3px #20A8D822;
+
           outline: none;
         }
 
-        /* ═════════════════════════════ TOASTS ═════════════════════════════ */
         @keyframes toast-in {
-          from { opacity: 0; transform: translateX(60px) scale(0.95); }
-          to   { opacity: 1; transform: translateX(0)     scale(1);   }
+          from {
+            opacity: 0;
+            transform: translateX(60px) scale(0.95);
+          }
+
+          to {
+            opacity: 1;
+            transform: translateX(0) scale(1);
+          }
         }
-        @keyframes toast-out {
-          from { opacity: 1; transform: translateX(0)   scale(1);    }
-          to   { opacity: 0; transform: translateX(60px) scale(0.95); }
-        }
+
         @keyframes toast-shrink {
-          from { width: 100%; }
-          to   { width: 0%; }
+          from {
+            width: 100%;
+          }
+
+          to {
+            width: 0%;
+          }
         }
+
         .wc-toast {
-          animation: toast-in 0.32s cubic-bezier(0.34, 1.3, 0.64, 1) forwards;
+          animation:
+            toast-in 0.32s cubic-bezier(
+              0.34,
+              1.3,
+              0.64,
+              1
+            ) forwards;
         }
+
         .wc-toast-bar {
-          animation: toast-shrink 3.8s linear forwards;
+          animation:
+            toast-shrink 3.8s linear forwards;
         }
       `}</style>
 
-      {/* ══════════════════════════════════════════ */}
-      {/* 🔔 TOAST STACK                             */}
-      {/* ══════════════════════════════════════════ */}
       <div className="fixed top-5 right-5 z-[70] flex flex-col gap-2.5 w-[320px] max-w-[90vw]">
         {toasts.map((t) => {
-          const style = TOAST_STYLES[t.type] || TOAST_STYLES.error;
+          const style =
+            TOAST_STYLES[t.type] ||
+            TOAST_STYLES.error;
+
           return (
             <div
               key={t.id}
@@ -398,200 +892,383 @@ export default function WappCampaign() {
                 overflow: "hidden",
               }}
             >
-              <div style={{
-                width: 22, height: 22, borderRadius: "50%",
-                background: style.accent, color: "#fff",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: 12, fontWeight: 800, flexShrink: 0, marginTop: 1,
-              }}>{style.icon}</div>
-              <div style={{ flex: 1, fontSize: 13, color: "#2b3948", lineHeight: 1.4, fontWeight: 500 }}>
+              <div
+                style={{
+                  width: 22,
+                  height: 22,
+                  borderRadius: "50%",
+                  background: style.accent,
+                  color: "#fff",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: 12,
+                  fontWeight: 800,
+                  flexShrink: 0,
+                  marginTop: 1,
+                }}
+              >
+                {style.icon}
+              </div>
+
+              <div
+                style={{
+                  flex: 1,
+                  fontSize: 13,
+                  color: "#2b3948",
+                  lineHeight: 1.4,
+                  fontWeight: 500,
+                }}
+              >
                 {t.message}
               </div>
+
               <button
-                onClick={() => dismissToast(t.id)}
+                onClick={() =>
+                  dismissToast(t.id)
+                }
                 style={{
-                  background: "transparent", border: "none", cursor: "pointer",
-                  color: "#9aa5b1", fontSize: 15, lineHeight: 1, padding: 0, flexShrink: 0,
+                  background: "transparent",
+                  border: "none",
+                  cursor: "pointer",
+                  color: "#9aa5b1",
+                  fontSize: 15,
+                  lineHeight: 1,
+                  padding: 0,
+                  flexShrink: 0,
                 }}
-              >✕</button>
-              <div style={{
-                position: "absolute", bottom: 0, left: 0, height: 3,
-                background: style.accent, opacity: 0.55,
-              }} className="wc-toast-bar" />
+              >
+                <FaTimes />
+              </button>
+
+              <div
+                style={{
+                  position: "absolute",
+                  bottom: 0,
+                  left: 0,
+                  height: 3,
+                  background: style.accent,
+                  opacity: 0.55,
+                }}
+                className="wc-toast-bar"
+              />
             </div>
           );
         })}
       </div>
 
-      {/* ══════════════════════════════════════════ */}
-      {/* 🔥 ARE YOU SURE OVERLAY                   */}
-      {/* ══════════════════════════════════════════ */}
       {showConfirm && (
         <div
           className="wc-backdrop fixed inset-0 z-50 flex items-center justify-center"
-          style={{ backgroundColor: "rgba(0,0,0,0.52)", backdropFilter: "blur(5px)" }}
+          style={{
+            backgroundColor:
+              "rgba(0,0,0,0.52)",
+            backdropFilter: "blur(5px)",
+          }}
         >
           <div
             className="wc-modal"
             style={{
               width: 420,
-              background: "linear-gradient(150deg, #ffffff 0%, #f5f8fc 100%)",
+              background:
+                "linear-gradient(150deg, #ffffff 0%, #f5f8fc 100%)",
               borderRadius: 20,
-              border: "1px solid #dde6f0",
+              border:
+                "1px solid #dde6f0",
               boxShadow:
                 "0 32px 80px rgba(0,0,0,0.20)," +
-                "0 0 0 1px rgba(255,255,255,0.85) inset," +
-                "0 2px 0 rgba(255,255,255,0.9) inset",
-              padding: "36px 32px 28px",
+                "0 0 0 1px rgba(255,255,255,0.85) inset",
+              padding:
+                "36px 32px 28px",
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
             }}
           >
-            {/* Top icon */}
-            <div style={{
-              width: 54, height: 54, borderRadius: "50%",
-              background: "linear-gradient(135deg, #20A8D8, #1591bb)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: 22, marginBottom: 14,
-              boxShadow: "0 6px 20px #20A8D844, 0 0 0 6px #20A8D811",
-            }}>📤</div>
+            <div
+              style={{
+                width: 54,
+                height: 54,
+                borderRadius: "50%",
+                background:
+                  "linear-gradient(135deg, #20A8D8, #1591bb)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: 22,
+                marginBottom: 14,
+                boxShadow:
+                  "0 6px 20px #20A8D844",
+              }}
+            >
+              <FaPaperPlane className="text-white" />
+            </div>
 
-            <h2 style={{
-              fontSize: 21, fontWeight: 700, color: "#1c2b3a",
-              margin: "0 0 5px", letterSpacing: "-0.01em",
-            }}>Are You Sure?</h2>
+            <h2
+              style={{
+                fontSize: 21,
+                fontWeight: 700,
+                color: "#1c2b3a",
+                margin: "0 0 5px",
+              }}
+            >
+              Are You Sure?
+            </h2>
 
-            <p style={{ color: "#9aa5b1", fontSize: 12.5, margin: "0 0 18px", textAlign: "center" }}>
+            <p
+              style={{
+                color: "#9aa5b1",
+                fontSize: 12.5,
+                margin: "0 0 18px",
+                textAlign: "center",
+              }}
+            >
               Review your campaign before sending
             </p>
 
-            {/* Detail pill */}
-            <div style={{
-              width: "100%",
-              background: "#eef5fb",
-              border: "1px solid #cce0f0",
-              borderRadius: 12,
-              padding: "11px 16px",
-              fontSize: 13, color: "#445", textAlign: "center",
-              lineHeight: 1.9, marginBottom: 22,
-            }}>
-              📋 <b style={{ color: "#1c2b3a" }}>{campaignName}</b>
-              &nbsp;&nbsp;·&nbsp;&nbsp;
-              📞 <b style={{ color: "#20A8D8" }}>{numbers.split("\n").filter((n) => n.trim()).length}</b> numbers
-              {files.images.length > 0 && <> &nbsp;·&nbsp; 🖼️ <b>{files.images.length}</b> imgs</>}
-              {files.video && <> &nbsp;·&nbsp; 🎬 video</>}
-              {files.pdf && <> &nbsp;·&nbsp; 📄 pdf</>}
+            <div
+              style={{
+                width: "100%",
+                background: "#eef5fb",
+                border:
+                  "1px solid #cce0f0",
+                borderRadius: 12,
+                padding: "11px 16px",
+                fontSize: 13,
+                color: "#445",
+                textAlign: "center",
+                lineHeight: 1.9,
+                marginBottom: 22,
+              }}
+            >
+              <FaList className="inline mr-1" />
+
+              <b
+                style={{
+                  color: "#1c2b3a",
+                }}
+              >
+                {campaignName}
+              </b>
+
+              &nbsp; · &nbsp;
+
+              <FaPhoneAlt className="inline mr-1" />
+
+              <b
+                style={{
+                  color: "#20A8D8",
+                }}
+              >
+                {
+                  numbers
+                    .split("\n")
+                    .filter((n) => n.trim())
+                    .length
+                }
+              </b>{" "}
+              numbers
+
+              {files.image && (
+                <>
+                  &nbsp; · &nbsp;
+                  <FaImage className="inline" />
+                  Image
+                </>
+              )}
+
+              {files.video && (
+                <>
+                  &nbsp; · &nbsp;
+                  <FaVideo className="inline" />
+                  Video
+                </>
+              )}
+
+              {files.pdf && (
+                <>
+                  &nbsp; · &nbsp;
+                  <FaFilePdf className="inline" />
+                  PDF
+                </>
+              )}
             </div>
 
-            {/* Buttons */}
-            <div style={{ display: "flex", gap: 10, width: "100%" }}>
+            <div
+              style={{
+                display: "flex",
+                gap: 10,
+                width: "100%",
+              }}
+            >
               <button
                 onClick={sendCampaign}
                 disabled={loading}
                 className="wc-btn-send"
                 style={{
-                  flex: 1, padding: "12px 0",
-                  background: "linear-gradient(135deg, #20A8D8, #1591bb)",
-                  color: "#fff", border: "none", borderRadius: 10,
-                  fontWeight: 700, fontSize: 13.5, cursor: "pointer",
-                  boxShadow: "0 4px 14px #20A8D844",
-                  display: "flex", alignItems: "center",
-                  justifyContent: "center", gap: 7,
+                  flex: 1,
+                  padding: "12px 0",
+                  background:
+                    "linear-gradient(135deg, #20A8D8, #1591bb)",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: 10,
+                  fontWeight: 700,
+                  fontSize: 13.5,
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent:
+                    "center",
+                  gap: 7,
                 }}
               >
-                {loading
-                  ? <><span className="wc-spinner" /> Sending…</>
-                  : "✅ Yes, Send!"}
+                {loading ? (
+                  <>
+                    <span className="wc-spinner" />
+                    Sending...
+                  </>
+                ) : (
+                  <>
+                    <FaCheck />
+                    Yes, Send!
+                  </>
+                )}
               </button>
 
               <button
-                onClick={() => setShowConfirm(false)}
+                onClick={() =>
+                  setShowConfirm(false)
+                }
                 className="wc-btn-cancel"
                 style={{
-                  flex: 1, padding: "12px 0",
-                  background: "#F86C6B", color: "#fff",
-                  border: "none", borderRadius: 10,
-                  fontWeight: 700, fontSize: 13.5, cursor: "pointer",
+                  flex: 1,
+                  padding: "12px 0",
+                  background: "#F86C6B",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: 10,
+                  fontWeight: 700,
+                  fontSize: 13.5,
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent:
+                    "center",
+                  gap: 6,
                 }}
-              >✕ Cancel</button>
+              >
+                <FaTimes />
+                Cancel
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ══════════════════════════════════════════ */}
-      {/* 🔥 CAMPAIGN SEND SUCCESS OVERLAY           */}
-      {/* ══════════════════════════════════════════ */}
       {showSuccess && (
         <div
           className="wc-backdrop fixed inset-0 z-50 flex items-center justify-center"
-          style={{ backgroundColor: "rgba(0,0,0,0.52)", backdropFilter: "blur(5px)" }}
+          style={{
+            backgroundColor:
+              "rgba(0,0,0,0.52)",
+            backdropFilter: "blur(5px)",
+          }}
         >
           <div
             className="wc-modal"
             style={{
               width: 400,
-              background: "linear-gradient(150deg, #ffffff 0%, #f3fdf7 100%)",
+              background:
+                "linear-gradient(150deg, #ffffff 0%, #f3fdf7 100%)",
               borderRadius: 20,
-              border: "1px solid #c5ebd5",
+              border:
+                "1px solid #c5ebd5",
               boxShadow:
-                "0 32px 80px rgba(0,0,0,0.18)," +
-                "0 0 0 1px rgba(255,255,255,0.9) inset," +
-                "0 2px 0 rgba(255,255,255,0.95) inset",
-              padding: "40px 32px 32px",
+                "0 32px 80px rgba(0,0,0,0.18)",
+              padding:
+                "40px 32px 32px",
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
             }}
           >
-            {/* Animated checkmark */}
             <div
               className="wc-check-icon"
               style={{
-                width: 64, height: 64, borderRadius: "50%",
-                background: "linear-gradient(135deg, #4DBD74, #28a745)",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                color: "#fff", fontSize: 28, fontWeight: 900,
+                width: 64,
+                height: 64,
+                borderRadius: "50%",
+                background:
+                  "linear-gradient(135deg, #4DBD74, #28a745)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#fff",
+                fontSize: 28,
                 marginBottom: 20,
               }}
-            >✓</div>
+            >
+              <FaCheck />
+            </div>
 
-            <h1 style={{
-              fontSize: 25, fontWeight: 800, color: "#1c2b3a",
-              margin: "0 0 7px", letterSpacing: "-0.02em",
-            }}>Campaign Sent!</h1>
+            <h1
+              style={{
+                fontSize: 25,
+                fontWeight: 800,
+                color: "#1c2b3a",
+                margin: "0 0 7px",
+              }}
+            >
+              Campaign Sent!
+            </h1>
 
-            <p style={{ color: "#9aa5b1", fontSize: 12.5, margin: "0 0 26px", textAlign: "center" }}>
+            <p
+              style={{
+                color: "#9aa5b1",
+                fontSize: 12.5,
+                margin: "0 0 26px",
+                textAlign: "center",
+              }}
+            >
               Your campaign has been submitted successfully
             </p>
 
-            {/* Thin divider */}
-            <div style={{
-              width: "80%", height: 1,
-              background: "linear-gradient(90deg, transparent, #b8e8cb, transparent)",
-              marginBottom: 24,
-            }} />
-
             <button
-              onClick={() => setShowSuccess(false)}
+              onClick={() =>
+                setShowSuccess(false)
+              }
               className="wc-btn-ok"
               style={{
-                padding: "13px 38px",
-                background: "linear-gradient(135deg, #20A8D8, #1591bb)",
-                color: "#fff", border: "none", borderRadius: 10,
-                fontWeight: 700, fontSize: 13.5, cursor: "pointer",
-                boxShadow: "0 4px 14px #20A8D844",
+                padding:
+                  "13px 38px",
+                background:
+                  "linear-gradient(135deg, #20A8D8, #1591bb)",
+                color: "#fff",
+                border: "none",
+                borderRadius: 10,
+                fontWeight: 700,
+                fontSize: 13.5,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: 7,
               }}
-            >🚀 Send Another Campaign</button>
+            >
+              <FaRocket />
+              Send Another Campaign
+            </button>
           </div>
         </div>
       )}
 
-      {/* ══════════════════════════════════════════════════════ */}
-      {/* MAIN FORM                                              */}
-      {/* ══════════════════════════════════════════════════════ */}
-      <div className={`transition-all duration-200 ${(showConfirm || showSuccess) ? "pointer-events-none select-none opacity-40" : ""}`}>
+      <div
+        className={`transition-all duration-200 ${
+          showConfirm || showSuccess
+            ? "pointer-events-none select-none opacity-40"
+            : ""
+        }`}
+      >
         <div className="bg-gray-200">
           <marquee className="text-red-600 py-2 text-[18px]">
             NOTE = All campaigns will be delivered Between 8A.M to 6P.M - (Monday to Saturday)
@@ -601,42 +1278,72 @@ export default function WappCampaign() {
         <div className="p-6">
           <div className="bg-white border border-gray-300 rounded">
             <div className="px-4 py-3 text-[18px] font-semibold text-gray-800 bg-[#f0f3f5] flex items-center gap-2">
-              <FaComments /> Wapp Campaign
+              <FaComments />
+              Wapp Campaign
             </div>
-            <div className="p-4">
 
-              {/* CAMPAIGN NAME + LIVE STATS + CLEAN BUTTON */}
+            <div className="p-4">
               <div className="camp-header-row mb-5">
                 <div className="flex">
-                  <div className="bg-[#F86C6B] text-white px-4 py-2 text-[15px] flex items-center">Campaign Name</div>
-                  <input value={campaignName} onChange={(e) => setCampaignName(e.target.value)}
+                  <div className="bg-[#F86C6B] text-white px-4 py-2 text-[15px] flex items-center">
+                    Campaign Name
+                  </div>
+
+                  <input
+                    value={campaignName}
+                    onChange={(e) =>
+                      setCampaignName(
+                        e.target.value
+                      )
+                    }
                     placeholder="Enter campaign name..."
-                    className="wc-input border border-gray-300 w-[320px] h-[38px] px-3 outline-none" />
+                    className="wc-input border border-gray-300 w-[320px] h-[38px] px-3 outline-none"
+                  />
                 </div>
 
-                {(validCount > 0 || invalidCount > 0 || duplicateCount > 0) && (
+                {(validCount > 0 ||
+                  invalidCount > 0 ||
+                  duplicateCount > 0) && (
                   <div className="camp-stats-row">
                     <span className="camp-stat-badge bg-[#20A8D8]">
-                      Total Valid:<b className="ml-1">{validCount}</b>
+                      Total Valid:
+                      <b className="ml-1">
+                        {validCount}
+                      </b>
                     </span>
+
                     <span className="camp-stat-badge bg-[#F0AD4E]">
-                      Duplicate:<b className="ml-1">{duplicateCount}</b>
+                      Duplicate:
+                      <b className="ml-1">
+                        {duplicateCount}
+                      </b>
                     </span>
+
                     <span className="camp-stat-badge bg-[#F86C6B]">
-                      Invalid:<b className="ml-1">{invalidCount}</b>
+                      Invalid:
+                      <b className="ml-1">
+                        {invalidCount}
+                      </b>
                     </span>
+
                     {justCleaned && (
-                      <span className="camp-stat-badge bg-indigo-500">
-                        ✓ List Cleaned
+                      <span className="camp-stat-badge bg-indigo-500 flex gap-1">
+                        <FaCheck />
+                        List Cleaned
                       </span>
                     )}
-                    {(invalidCount > 0 || duplicateCount > 0) && (
+
+                    {(invalidCount > 0 ||
+                      duplicateCount > 0) && (
                       <button
                         type="button"
-                        onClick={cleanNumbersField}
-                        className="camp-stat-badge bg-white text-gray-600 border border-gray-300 hover:bg-gray-100"
+                        onClick={
+                          cleanNumbersField
+                        }
+                        className="camp-stat-badge bg-white text-gray-600 border border-gray-300 hover:bg-gray-100 flex gap-1"
                       >
-                        🧹 Clean Now
+                        <FaBroom />
+                        Clean Now
                       </button>
                     )}
                   </div>
@@ -644,55 +1351,155 @@ export default function WappCampaign() {
               </div>
 
               <div className="flex gap-5">
-                {/* NUMBERS */}
                 <div className="w-[22%]">
-                  <p className="mb-1 text-[18px]">Numbers:
+                  <p className="mb-1 text-[18px]">
+                    Numbers:
                   </p>
+
                   <textarea
                     value={numbers}
-                    onChange={(e) => setNumbers(e.target.value)}
-                    onPaste={() => setTimeout(cleanNumbersField, 0)}
-                    onBlur={cleanNumbersField}
-                    className="wc-textarea w-full h-[500px] border border-green-400 rounded px-2 py-2 text-[13px] outline-none resize-none" />
+                    onChange={(e) =>
+                      setNumbers(e.target.value)
+                    }
+                    onPaste={() =>
+                      setTimeout(
+                        cleanNumbersField,
+                        0
+                      )
+                    }
+                    onBlur={
+                      cleanNumbersField
+                    }
+                    className="wc-textarea w-full h-[500px] border border-green-400 rounded px-2 py-2 text-[13px] outline-none resize-none"
+                  />
                 </div>
 
-                {/* RIGHT SIDE */}
                 <div className="w-[78%]">
-                  <p className="mb-1 text-[18px]">Message:</p>
-                  <textarea value={message} onChange={(e) => setMessage(e.target.value)}
-                    placeholder="Type your WhatsApp message here..."
-                    className="wc-textarea w-full h-[190px] border border-green-400 rounded px-2 py-2 text-[13px] outline-none resize-none mb-3" />
+                  <p className="mb-1 text-[18px]">
+                    Message:
+                  </p>
 
-                  <UploadBox title="📷 Images (Max 4 • 1MB each)" type="image" color="bg-[#63C2DE]" />
-                  <div className="flex gap-3 mt-2">
-                    <div className="w-1/2"><UploadBox title="🎬 Video (Max 3MB)" type="video" color="bg-[#4DBD74]" /></div>
-                    <div className="w-1/2"><UploadBox title="📄 PDF (Max 1MB)" type="pdf" color="bg-[#F86C6B]" /></div>
+                  <textarea
+                    value={message}
+                    onChange={(e) =>
+                      setMessage(e.target.value)
+                    }
+                    placeholder="Type your WhatsApp message here..."
+                    className="wc-textarea w-full h-[190px] border border-green-400 rounded px-2 py-2 text-[13px] outline-none resize-none mb-3"
+                  />
+
+                  {/* ATTACHMENT RULE - MESSAGE KE NICHE */}
+                  <div className="mb-3 border border-blue-300 bg-blue-50 rounded-lg px-4 py-3">
+                    <div className="flex items-center gap-2 text-blue-700 font-semibold text-sm">
+                      <FaPaperclip />
+                      Upload only one file: Image, Video, or PDF
+                    </div>
+
+                    {selectedAttachment && (
+                      <div className="flex items-center gap-1 mt-1 text-xs text-green-600 font-semibold">
+                        <FaCheck />
+                        Selected:{" "}
+                        {selectedAttachment
+                          .charAt(0)
+                          .toUpperCase() +
+                          selectedAttachment.slice(
+                            1
+                          )}
+                      </div>
+                    )}
                   </div>
 
-                  {(files.images.length > 0 || files.video || files.pdf) && (
+                  <UploadBox
+                    title="Image (Max 1 • 1MB)"
+                    type="image"
+                    color="bg-[#63C2DE]"
+                  />
+
+                  <div className="flex gap-3 mt-2">
+                    <div className="w-1/2">
+                      <UploadBox
+                        title="Video (Max 3MB)"
+                        type="video"
+                        color="bg-[#4DBD74]"
+                      />
+                    </div>
+
+                    <div className="w-1/2">
+                      <UploadBox
+                        title="PDF (Max 1MB)"
+                        type="pdf"
+                        color="bg-[#F86C6B]"
+                      />
+                    </div>
+                  </div>
+
+                  {selectedAttachment && (
                     <div className="mt-3 p-3 bg-green-50 border border-green-300 rounded text-sm">
-                      <b className="text-green-700">📎 Attachment selected:</b>
-                      <ul className="mt-1 text-green-600">
-                        {files.images.length > 0 && <li>🖼️ Images: {files.images.length}</li>}
-                        {files.video && <li>🎬 Video: {files.video.name}</li>}
-                        {files.pdf && <li>📄 PDF: {files.pdf.name}</li>}
-                      </ul>
+                      <b className="text-green-700 flex items-center gap-2">
+                        <FaPaperclip />
+                        Attachment selected:
+                      </b>
+
+                      <div className="mt-1 text-green-600 flex items-center gap-2">
+                        {files.image && (
+                          <>
+                            <FaImage />
+                            Image:{" "}
+                            {
+                              files.image
+                                .name
+                            }
+                          </>
+                        )}
+
+                        {files.video && (
+                          <>
+                            <FaVideo />
+                            Video:{" "}
+                            {
+                              files.video
+                                .name
+                            }
+                          </>
+                        )}
+
+                        {files.pdf && (
+                          <>
+                            <FaFilePdf />
+                            PDF:{" "}
+                            {
+                              files.pdf
+                                .name
+                            }
+                          </>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
               </div>
 
-              {/* SEND BUTTON */}
-              <button onClick={handleSendClick} disabled={loading}
-                className="mt-4 bg-[#20A8D8] hover:bg-[#1b8db8] text-white px-7 py-3 disabled:opacity-50 flex items-center gap-2 transition-colors duration-150">
-                {loading ? <><span className="animate-spin">⏳</span> Sending...</> : " Send Now"}
+              <button
+                onClick={handleSendClick}
+                disabled={loading}
+                className="mt-4 bg-[#20A8D8] hover:bg-[#1b8db8] text-white px-7 py-3 disabled:opacity-50 flex items-center gap-2 transition-colors duration-150"
+              >
+                {loading ? (
+                  <>
+                    <span className="wc-spinner" />
+                    Sending...
+                  </>
+                ) : (
+                  <>
+                    <FaPaperPlane />
+                    Send Now
+                  </>
+                )}
               </button>
-
             </div>
           </div>
         </div>
       </div>
-
     </div>
   );
 }

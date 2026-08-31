@@ -46,9 +46,14 @@ const TOAST_STYLES = {
 export default function WappDpCampaign() {
   const dpRef = useRef(null);
   const [dp, setDp] = useState(null);
-  const [images, setImages] = useState([]);
-  const [video, setVideo] = useState(null);
-  const [pdf, setPdf] = useState(null);
+  // Single message attachment: Image OR Video OR PDF
+  const [attachment, setAttachment] = useState(null);
+
+  // CTA buttons
+  const [linkLabel, setLinkLabel] = useState("Visit Now");
+  const [linkUrl, setLinkUrl] = useState("");
+  const [callLabel, setCallLabel] = useState("Call Now");
+  const [callNumber, setCallNumber] = useState("");
 
   const [campaignName, setCampaignName] = useState("");
   const [numbers, setNumbers] = useState("");
@@ -89,93 +94,116 @@ export default function WappDpCampaign() {
   }, []);
 
   // ===============================
-  // UPLOAD BOX
+  // SINGLE UPLOAD BOX
+  // Image OR Video OR PDF
   // ===============================
-  const UploadBox = ({ title, type, color }) => {
+  const SingleUploadBox = () => {
     const { getRootProps, getInputProps, isDragActive } = useDropzone({
-      accept:
-        type === "image" ? { "image/*": [] }
-          : type === "video" ? { "video/*": [] }
-            : { "application/pdf": [] },
-      multiple: type === "image",
+      accept: {
+        "image/*": [],
+        "video/*": [],
+        "application/pdf": [],
+      },
+      multiple: false,
       onDrop: (acceptedFiles) => {
         if (!acceptedFiles.length) return;
-        if (type === "image") {
-          const valid = acceptedFiles.filter((f) => f.size <= 1 * 1024 * 1024);
-          if (valid.length !== acceptedFiles.length) showToast("Each image must be under 1MB", "warning");
-          setImages((prev) => [...prev, ...valid].slice(0, 4));
+
+        const file = acceptedFiles[0];
+        const isImage = file.type.startsWith("image/");
+        const isVideo = file.type.startsWith("video/");
+        const isPdf = file.type === "application/pdf";
+
+        if (isImage && file.size > 1 * 1024 * 1024) {
+          showToast("Image must be under 1MB", "warning");
+          return;
         }
-        if (type === "video") {
-          const f = acceptedFiles[0];
-          if (f.size > 3 * 1024 * 1024) { showToast("Video must be under 3MB", "warning"); return; }
-          setVideo(f);
+
+        if (isVideo && file.size > 3 * 1024 * 1024) {
+          showToast("Video must be under 3MB", "warning");
+          return;
         }
-        if (type === "pdf") {
-          const f = acceptedFiles[0];
-          if (f.size > 1 * 1024 * 1024) { showToast("PDF must be under 1MB", "warning"); return; }
-          setPdf(f);
+
+        if (isPdf && file.size > 1 * 1024 * 1024) {
+          showToast("PDF must be under 1MB", "warning");
+          return;
         }
+
+        setAttachment(file);
       },
     });
 
-    const hasFile =
-      type === "image" ? images.length > 0
-        : type === "video" ? !!video
-          : !!pdf;
+    const fileType = attachment
+      ? attachment.type.startsWith("image/")
+        ? "image"
+        : attachment.type.startsWith("video/")
+          ? "video"
+          : "pdf"
+      : null;
 
     return (
       <div className="border border-gray-300 rounded overflow-hidden transition-shadow duration-200 hover:shadow-sm">
-        <div className={`${color} text-white px-4 py-2 text-[13px] font-semibold flex justify-between items-center`}>
-          <span>{title}</span>
-          {hasFile && (
+        <div className="bg-[#63C2DE] text-white px-4 py-2 text-[13px] font-semibold flex justify-between items-center">
+          <span>📎 Image/PDF/Video Upload (Max file size 1 MB.)</span>
+
+          {attachment && (
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                if (type === "image") setImages([]);
-                if (type === "video") setVideo(null);
-                if (type === "pdf") setPdf(null);
+                setAttachment(null);
               }}
               className="text-white text-xs bg-black bg-opacity-30 hover:bg-opacity-45 px-2 py-0.5 rounded transition-colors duration-150"
-            >✕ Remove</button>
+            >
+              ✕ Remove
+            </button>
           )}
         </div>
+
         <div
           {...getRootProps()}
-          className={`text-center py-0 text-[13px] cursor-pointer transition-colors duration-200 ${isDragActive ? "bg-blue-50" : "bg-gray-100 hover:bg-gray-200"}`}
+          className={`text-center py-4 text-[13px] cursor-pointer transition-colors duration-200 ${
+            isDragActive ? "bg-blue-50" : "bg-gray-100 hover:bg-gray-200"
+          }`}
         >
           <input {...getInputProps()} />
-          {hasFile ? (
+
+          {attachment ? (
             <div className="flex flex-col items-center gap-2 px-3">
-              {type === "image" ? (
-                <>
-                  <div className="flex flex-wrap gap-2 justify-center">
-                    {images.map((img, index) => (
-                      <img key={index} src={URL.createObjectURL(img)} alt="preview" className="w-[70px] h-[70px] object-cover rounded border transition-transform duration-200 hover:scale-105" />
-                    ))}
-                  </div>
-                  <span className="text-green-600 font-semibold text-[12px]">✅ {images.length} Images Selected</span>
-                </>
-              ) : type === "video" ? (
-                <>
-                  <video src={URL.createObjectURL(video)} className="w-[120px] h-[80px] object-cover rounded border" controls />
-                  <span className="text-green-600 font-semibold text-[12px] truncate max-w-[200px]">✅ {video.name}</span>
-                  <span className="text-gray-400 text-[11px]">{(video.size / 1024).toFixed(1)} KB</span>
-                </>
-              ) : (
-                <>
-                  <div className="text-4xl">📄</div>
-                  <span className="text-green-600 font-semibold text-[12px] truncate max-w-[200px]">✅ {pdf.name}</span>
-                  <span className="text-gray-400 text-[11px]">{(pdf.size / 1024).toFixed(1)} KB</span>
-                </>
+              {fileType === "image" && (
+                <img
+                  src={URL.createObjectURL(attachment)}
+                  alt="preview"
+                  className="w-[90px] h-[90px] object-cover rounded border transition-transform duration-200 hover:scale-105"
+                />
               )}
+
+              {fileType === "video" && (
+                <video
+                  src={URL.createObjectURL(attachment)}
+                  className="w-[160px] h-[90px] object-cover rounded border"
+                  controls
+                />
+              )}
+
+              {fileType === "pdf" && (
+                <div className="text-4xl">📄</div>
+              )}
+
+              <span className="text-green-600 font-semibold text-[12px] truncate max-w-[320px]">
+                ✅ {attachment.name}
+              </span>
+
+              <span className="text-gray-400 text-[11px]">
+                {(attachment.size / 1024).toFixed(1)} KB
+              </span>
             </div>
           ) : (
             <div className="text-gray-500 px-3">
-              <div className="text-2xl mb-1">{type === "image" ? "🖼️" : type === "video" ? "🎬" : "📄"}</div>
-              Drag & Drop {type} file <br />
-              <span className="underline text-blue-500">Browse</span>
+              <div className="text-2xl mb-1">📎</div>
+              Drag & Drop image/pdf/video files (maximum 1) or
+              <br />
+              <span className="underline text-blue-500">Browse Image/PDF/Video</span>
               <div className="text-xs text-gray-400 mt-1">
-                {type === "image" ? "Max 4 images • 1MB each" : type === "video" ? "Max 1 video • 3MB" : "Max 1 PDF • 1MB"}
+                Image/PDF: Max 1MB • Video: Max 3MB
               </div>
             </div>
           )}
@@ -184,11 +212,14 @@ export default function WappDpCampaign() {
     );
   };
 
+
   const numberList = [...new Set(numbers.split("\n").map((n) => n.trim()).filter((n) => n !== ""))];
 
   const resetForm = () => {
     setNumbers(""); setMessage(""); setCampaignName("");
-    setImages([]); setVideo(null); setPdf(null); setDp(null);
+    setAttachment(null); setDp(null);
+    setLinkLabel("Visit Now"); setLinkUrl("");
+    setCallLabel("Call Now"); setCallNumber("");
     if (dpRef.current) dpRef.current.value = "";
   };
 
@@ -209,11 +240,43 @@ export default function WappDpCampaign() {
       formData.append("message", message);
       formData.append("user_id", userId);
       formData.append("campaign_name", campaignName);
+      // CTA BUTTONS
+if (linkUrl && linkUrl.trim()) {
+  formData.append(
+    "link_label",
+    linkLabel?.trim() || "Visit Now"
+  );
+
+  formData.append(
+    "link_url",
+    linkUrl.trim()
+  );
+}
+
+if (callNumber && callNumber.trim()) {
+  formData.append(
+    "call_label",
+    callLabel?.trim() || "Call Now"
+  );
+
+  formData.append(
+    "call_number",
+    callNumber.trim()
+  );
+}
       numberList.forEach((n) => formData.append("numbers", n));
       if (dp) formData.append("dp", dp);
-      images.forEach((img) => formData.append("images", img));
-      if (video) formData.append("video", video);
-      if (pdf)   formData.append("pdf",   pdf);
+
+      // Send only one attachment, according to its type
+      if (attachment) {
+        if (attachment.type.startsWith("image/")) {
+          formData.append("images", attachment);
+        } else if (attachment.type.startsWith("video/")) {
+          formData.append("video", attachment);
+        } else if (attachment.type === "application/pdf") {
+          formData.append("pdf", attachment);
+        }
+      }
 
       const res  = await fetch("https://latestchatway.onrender.com/api/send-whatsapp/", { method: "POST", body: formData });
       const data = await res.json();
@@ -463,10 +526,12 @@ export default function WappDpCampaign() {
               📋 <b style={{ color: "#1c2b3a" }}>{campaignName}</b>
               &nbsp;&nbsp;·&nbsp;&nbsp;
               📞 <b style={{ color: "#20A8D8" }}>{numberList.length}</b> numbers
-              {dp      && <> &nbsp;·&nbsp; 👤 DP</>}
-              {images.length > 0 && <> &nbsp;·&nbsp; 🖼️ <b>{images.length}</b> imgs</>}
-              {video   && <> &nbsp;·&nbsp; 🎬 video</>}
-              {pdf     && <> &nbsp;·&nbsp; 📄 pdf</>}
+              {dp && <> &nbsp;·&nbsp; 👤 DP</>}
+              {attachment && (
+                <> &nbsp;·&nbsp; {attachment.type.startsWith("image/") ? "🖼️ image" : attachment.type.startsWith("video/") ? "🎬 video" : "📄 pdf"}</>
+              )}
+              {linkUrl && <> &nbsp;·&nbsp; 🔗 link</>}
+              {callNumber && <> &nbsp;·&nbsp; 📞 call</>}
             </div>
 
             <div style={{ display: "flex", gap: 10, width: "100%" }}>
@@ -684,27 +749,57 @@ export default function WappDpCampaign() {
                     </div>
                   </div>
 
-                  {/* IMAGE UPLOAD */}
-                  <UploadBox title="📷 Images (Max 4 • 1MB each)" type="image" color="bg-[#63C2DE]" />
-
-                  <div className="flex gap-3 mt-2">
-                    <div className="w-1/2">
-                      <UploadBox title="🎬 Video (Max 3MB)" type="video" color="bg-[#4DBD74]" />
+                  {/* TWO CTA BUTTONS */}
+                  <div className="space-y-2 mb-2">
+                    <div className="flex">
+                      <div className="bg-[#f0f3f5] border border-gray-300 px-4 py-2 text-[13px] text-gray-600 rounded-l">
+                        Link
+                      </div>
+                      <input
+                        value={linkLabel}
+                        onChange={(e) => setLinkLabel(e.target.value)}
+                        placeholder="Visit Now"
+                        className="wc-input border-y border-gray-300 px-3 w-[205px] text-[13px] outline-none"
+                      />
+                      <input
+                        value={linkUrl}
+                        onChange={(e) => setLinkUrl(e.target.value)}
+                        placeholder="http://"
+                        className="wc-input border border-gray-300 rounded-r px-3 flex-1 text-[13px] outline-none"
+                      />
                     </div>
-                    <div className="w-1/2">
-                      <UploadBox title="📄 PDF (Max 1MB)" type="pdf" color="bg-[#F86C6B]" />
+
+                    <div className="flex">
+                      <div className="bg-[#f0f3f5] border border-gray-300 px-4 py-2 text-[13px] text-gray-600 rounded-l">
+                        Call
+                      </div>
+                      <input
+                        value={callLabel}
+                        onChange={(e) => setCallLabel(e.target.value)}
+                        placeholder="Call Now"
+                        className="wc-input border-y border-gray-300 px-3 w-[205px] text-[13px] outline-none"
+                      />
+                      <input
+                        value={callNumber}
+                        onChange={(e) => setCallNumber(e.target.value)}
+                        placeholder="10 Digit number"
+                        className="wc-input border border-gray-300 rounded-r px-3 flex-1 text-[13px] outline-none"
+                      />
                     </div>
                   </div>
 
+                  {/* SINGLE IMAGE / PDF / VIDEO UPLOAD */}
+                  <SingleUploadBox />
+
                   {/* SUMMARY */}
-                  {(dp || images.length > 0 || video || pdf) && (
+                  {(dp || attachment || linkUrl || callNumber) && (
                     <div className="mt-3 p-3 bg-green-50 border border-green-300 rounded text-sm">
-                      <b className="text-green-700">📎 Attachment selected:</b>
+                      <b className="text-green-700">📎 Selected:</b>
                       <ul className="mt-1 text-green-600">
                         {dp && <li>👤 DP: {dp.name}</li>}
-                        {images.length > 0 && <li>🖼️ Images: {images.length}</li>}
-                        {video && <li>🎬 Video: {video.name}</li>}
-                        {pdf && <li>📄 PDF: {pdf.name}</li>}
+                        {attachment && <li>📎 File: {attachment.name}</li>}
+                        {linkUrl && <li>🔗 Link: {linkUrl}</li>}
+                        {callNumber && <li>📞 Call: {callNumber}</li>}
                       </ul>
                     </div>
                   )}

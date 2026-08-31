@@ -1242,7 +1242,18 @@ def _collect_uploaded_files(request):
 # the scheduled-campaign runner, so scheduling doesn't duplicate logic.
 # Credit must already be reserved before this is called.
 # ═════════════════════════════════════════════════════════════════════════
-def _execute_send(user, campaign_name, numbers, message, file_list, existing_campaign=None):
+def _execute_send(
+    user,
+    campaign_name,
+    numbers,
+    message,
+    file_list,
+    existing_campaign=None,
+    link_label="",
+    link_url="",
+    call_label="",
+    call_number=""
+):
     job_id = str(uuid.uuid4())
     _init_progress(job_id, len(numbers))
     t0 = time.time()
@@ -1285,6 +1296,11 @@ def _execute_send(user, campaign_name, numbers, message, file_list, existing_cam
             user=user,
             campaign_name=campaign_name,
             message=message,
+                # CTA BUTTONS
+            link_label=link_label,
+            link_url=link_url,
+            call_label=call_label,
+            call_number=call_number,
             total=len(numbers),
             success=success,
             failed=failed,
@@ -1349,14 +1365,39 @@ def process_scheduled_campaigns():
 def _run_one_scheduled_campaign(campaign_id):
     try:
         campaign = Campaign.objects.select_related("user").get(id=campaign_id)
-        numbers = campaign.number_list or []
-        file_list = [(url, url.split("/")[-1]) for url in (campaign.file_urls or [])]
-        _execute_send(campaign.user, campaign.campaign_name, numbers, campaign.message,
-                      file_list, existing_campaign=campaign)
-    except Exception as e:
-        logger.exception("_run_one_scheduled_campaign error for id=%s: %s", campaign_id, e)
-        Campaign.objects.filter(id=campaign_id).update(status="failed_to_send")
 
+        numbers = campaign.number_list or []
+
+        file_list = [
+            (url, url.split("/")[-1])
+            for url in (campaign.file_urls or [])
+        ]
+
+        _execute_send(
+            campaign.user,
+            campaign.campaign_name,
+            numbers,
+            campaign.message,
+            file_list,
+            existing_campaign=campaign,
+            link_label=campaign.link_label,
+            link_url=campaign.link_url,
+            call_label=campaign.call_label,
+            call_number=campaign.call_number,
+        )
+
+    except Exception as e:
+        logger.exception(
+            "_run_one_scheduled_campaign error for id=%s: %s",
+            campaign_id,
+            e
+        )
+
+        Campaign.objects.filter(
+            id=campaign_id
+        ).update(
+            status="failed_to_send"
+        )
 
 @api_view(['POST'])
 def run_scheduled_campaigns(request):
@@ -1457,6 +1498,13 @@ def send_whatsapp(request):
         user_id       = request.data.get("user_id")
         campaign_name = request.data.get("campaign_name", "N/A")
 
+        # CTA BUTTON DATA
+        link_label = request.data.get("link_label", "").strip()
+        link_url = request.data.get("link_url", "").strip()
+
+        call_label = request.data.get("call_label", "").strip()
+        call_number = request.data.get("call_number", "").strip()
+
         # 🆕 Optional scheduling: pass `scheduled_at` as an ISO datetime string
         # (e.g. "2026-07-24T18:30:00+05:30"). If it's in the future, the
         # campaign is queued instead of sent immediately.
@@ -1486,6 +1534,11 @@ def send_whatsapp(request):
                 user=user,
                 campaign_name=campaign_name,
                 message=message,
+                    # CTA BUTTONS
+    link_label=link_label,
+    link_url=link_url,
+    call_label=call_label,
+    call_number=call_number,
                 total=len(numbers),
                 success=0, failed=0, nonwa=0, rejected=0,
                 results=[],
@@ -1517,6 +1570,11 @@ def send_whatsapp(request):
                 user=user,
                 campaign_name=campaign_name,
                 message=message,
+                    # CTA BUTTONS
+    link_label=link_label,
+    link_url=link_url,
+    call_label=call_label,
+    call_number=call_number,
                 total=len(numbers),
                 success=0,
                 failed=0,
@@ -1546,7 +1604,17 @@ def send_whatsapp(request):
         # ≤15 NUMBERS = NORMAL IMMEDIATE SEND
         # (now routed through the shared _execute_send executor)
         # ─────────────────────────────────────────
-        outcome = _execute_send(user, campaign_name, numbers, message, file_list)
+        outcome = _execute_send(
+    user,
+    campaign_name,
+    numbers,
+    message,
+    file_list,
+    link_label=link_label,
+    link_url=link_url,
+    call_label=call_label,
+    call_number=call_number,
+)
 
         return Response({
             "status":      "done",

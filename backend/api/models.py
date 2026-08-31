@@ -2,30 +2,56 @@ from django.db import models
 
 
 class User(models.Model):
+
     ROLE_CHOICES = (
-        ("admin",    "Admin"),
+        ("admin", "Admin"),
         ("reseller", "Reseller"),
-        ("user",     "User"),
+        ("user", "User"),
     )
 
-    username = models.CharField(max_length=100, unique=True)
-    password = models.CharField(max_length=255)
-    role     = models.CharField(max_length=20, choices=ROLE_CHOICES, default="user")
-    parent   = models.ForeignKey(
-        "self", on_delete=models.SET_NULL,
-        null=True, blank=True, related_name="children"
+    username = models.CharField(
+        max_length=100,
+        unique=True
     )
-    credit = models.IntegerField(default=0)
-    status = models.CharField(max_length=10, default="Active")
-    created_at = models.DateTimeField(auto_now_add=True)
+
+    password = models.CharField(
+        max_length=255
+    )
+
+    role = models.CharField(
+        max_length=20,
+        choices=ROLE_CHOICES,
+        default="user"
+    )
+
+    parent = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="children"
+    )
+
+    credit = models.IntegerField(
+        default=0
+    )
+
+    status = models.CharField(
+        max_length=10,
+        default="Active"
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True
+    )
 
     def is_admin(self):
         return self.role == "admin"
 
     def save(self, *args, **kwargs):
-        # Admin ka credit kabhi negative nahi hoga (unlimited treat hota hai)
         if self.role != "admin" and self.credit < 0:
             self.credit = 0
+
         super().save(*args, **kwargs)
 
     def __str__(self):
@@ -33,51 +59,179 @@ class User(models.Model):
 
 
 class CreditLog(models.Model):
+
     ACTION_CHOICES = (
         ("credit", "Credit"),
-        ("debit",  "Debit"),
+        ("debit", "Debit"),
     )
-    from_user   = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="sent_logs")
-    to_user     = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="received_logs")
-    action      = models.CharField(max_length=10, choices=ACTION_CHOICES)
-    amount      = models.IntegerField()
-    description = models.TextField(blank=True)
-    created_at  = models.DateTimeField(auto_now_add=True)
+
+    from_user = models.ForeignKey(
+        User,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="sent_logs"
+    )
+
+    to_user = models.ForeignKey(
+        User,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="received_logs"
+    )
+
+    action = models.CharField(
+        max_length=10,
+        choices=ACTION_CHOICES
+    )
+
+    amount = models.IntegerField()
+
+    description = models.TextField(
+        blank=True
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True
+    )
 
     def __str__(self):
-        return f"{self.action} {self.amount} | {self.from_user} → {self.to_user}"
-
+        return (
+            f"{self.action} {self.amount} | "
+            f"{self.from_user} → {self.to_user}"
+        )
 
 
 class Campaign(models.Model):
+
     STATUS_CHOICES = (
-        ("pending",        "Pending"),
-        ("completed",      "Completed"),
-        ("scheduled",      "Scheduled"),        # 🆕 waiting for scheduled_at to arrive
-        ("sending",        "Sending"),           # 🆕 scheduler picked it up, send in progress
-        ("failed_to_send", "Failed To Send"),    # 🆕 scheduled send crashed before completing
-        ("cancelled",      "Cancelled"),         # 🆕 cancel_campaign() sets this
+        ("pending", "Pending"),
+        ("completed", "Completed"),
+        ("scheduled", "Scheduled"),
+        ("sending", "Sending"),
+        ("failed_to_send", "Failed To Send"),
+        ("cancelled", "Cancelled"),
     )
 
-    user          = models.ForeignKey(User, on_delete=models.CASCADE)
-    campaign_name = models.CharField(max_length=255, blank=True, default="")
-    message       = models.TextField()
-    total         = models.IntegerField(default=0)
-    success       = models.IntegerField(default=0)
-    failed        = models.IntegerField(default=0)
-    nonwa         = models.IntegerField(default=0)
-    rejected      = models.IntegerField(default=0)
-    status        = models.CharField(
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE
+    )
+
+    campaign_name = models.CharField(
+        max_length=255,
+        blank=True,
+        default=""
+    )
+
+    message = models.TextField()
+
+    # ==============================
+    # CTA LINK BUTTON
+    # ==============================
+
+    link_label = models.CharField(
+        max_length=100,
+        blank=True,
+        default=""
+    )
+
+    link_url = models.URLField(
+        blank=True,
+        default=""
+    )
+
+    # ==============================
+    # CTA CALL BUTTON
+    # ==============================
+
+    call_label = models.CharField(
+        max_length=100,
+        blank=True,
+        default=""
+    )
+
+    call_number = models.CharField(
+        max_length=30,
+        blank=True,
+        default=""
+    )
+
+    # ==============================
+    # CAMPAIGN STATS
+    # ==============================
+
+    total = models.IntegerField(
+        default=0
+    )
+
+    success = models.IntegerField(
+        default=0
+    )
+
+    failed = models.IntegerField(
+        default=0
+    )
+
+    nonwa = models.IntegerField(
+        default=0
+    )
+
+    rejected = models.IntegerField(
+        default=0
+    )
+
+    # ==============================
+    # CAMPAIGN STATUS
+    # ==============================
+
+    status = models.CharField(
         max_length=20,
         choices=STATUS_CHOICES,
         default="completed"
     )
-    results       = models.JSONField(default=list, blank=True)
-    number_list   = models.JSONField(default=list, blank=True)
-    file_urls     = models.JSONField(default=list, blank=True)
-    complete_at   = models.DateTimeField(null=True, blank=True)
-    scheduled_at  = models.DateTimeField(null=True, blank=True)       # 🆕 when a scheduled campaign should fire
-    created_at    = models.DateTimeField(auto_now_add=True)
+
+    # ==============================
+    # CAMPAIGN DATA
+    # ==============================
+
+    results = models.JSONField(
+        default=list,
+        blank=True
+    )
+
+    number_list = models.JSONField(
+        default=list,
+        blank=True
+    )
+
+    file_urls = models.JSONField(
+        default=list,
+        blank=True
+    )
+
+    # ==============================
+    # CAMPAIGN TIMING
+    # ==============================
+
+    complete_at = models.DateTimeField(
+        null=True,
+        blank=True
+    )
+
+    scheduled_at = models.DateTimeField(
+        null=True,
+        blank=True
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True
+    )
 
     def __str__(self):
-        return f"{self.user.username} - {self.campaign_name} - {self.status}"
+        return (
+            f"{self.user.username} - "
+            f"{self.campaign_name} - "
+            f"{self.status}"
+        )
