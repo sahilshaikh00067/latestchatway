@@ -467,6 +467,11 @@ def my_campaigns(request):
             "id":            c.id,
             "name":          c.campaign_name,
             "message":       c.message,
+            "dp_url":        c.dp_url,
+            "link_label":    c.link_label,
+            "link_url":      c.link_url,
+            "call_label":    c.call_label,
+            "call_number":   c.call_number,
             "total":         c.total,
             "success":       c.success,
             "failed":        c.failed,
@@ -1249,6 +1254,7 @@ def _execute_send(
     message,
     file_list,
     existing_campaign=None,
+    dp_url="",
     link_label="",
     link_url="",
     call_label="",
@@ -1296,6 +1302,7 @@ def _execute_send(
             user=user,
             campaign_name=campaign_name,
             message=message,
+            dp_url=dp_url,
                 # CTA BUTTONS
             link_label=link_label,
             link_url=link_url,
@@ -1505,6 +1512,17 @@ def send_whatsapp(request):
         call_label = request.data.get("call_label", "").strip()
         call_number = request.data.get("call_number", "").strip()
 
+        # Campaign DP (optional)
+        dp_url = request.data.get("dp_url", "").strip()
+        dp_file = request.FILES.get("dp")
+        uploaded_dp_url = ""
+
+        if dp_file:
+            uploaded_dp_url, _ = upload_file(dp_file)
+
+        if uploaded_dp_url:
+            dp_url = uploaded_dp_url
+
         # 🆕 Optional scheduling: pass `scheduled_at` as an ISO datetime string
         # (e.g. "2026-07-24T18:30:00+05:30"). If it's in the future, the
         # campaign is queued instead of sent immediately.
@@ -1534,11 +1552,12 @@ def send_whatsapp(request):
                 user=user,
                 campaign_name=campaign_name,
                 message=message,
-                    # CTA BUTTONS
-    link_label=link_label,
-    link_url=link_url,
-    call_label=call_label,
-    call_number=call_number,
+                dp_url=dp_url,
+                # CTA BUTTONS
+                link_label=link_label,
+                link_url=link_url,
+                call_label=call_label,
+                call_number=call_number,
                 total=len(numbers),
                 success=0, failed=0, nonwa=0, rejected=0,
                 results=[],
@@ -1570,11 +1589,12 @@ def send_whatsapp(request):
                 user=user,
                 campaign_name=campaign_name,
                 message=message,
-                    # CTA BUTTONS
-    link_label=link_label,
-    link_url=link_url,
-    call_label=call_label,
-    call_number=call_number,
+                dp_url=dp_url,
+                # CTA BUTTONS
+                link_label=link_label,
+                link_url=link_url,
+                call_label=call_label,
+                call_number=call_number,
                 total=len(numbers),
                 success=0,
                 failed=0,
@@ -1610,6 +1630,7 @@ def send_whatsapp(request):
     numbers,
     message,
     file_list,
+    dp_url=dp_url,
     link_label=link_label,
     link_url=link_url,
     call_label=call_label,

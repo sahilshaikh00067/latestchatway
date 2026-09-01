@@ -128,36 +128,36 @@ class Campaign(models.Model):
     message = models.TextField()
 
     # ==============================
-    # CTA LINK BUTTON
-    # ==============================
+# CAMPAIGN DP
+# ==============================
+
+    dp_url = models.URLField(
+    blank=True,
+    default=""
+    )
 
     link_label = models.CharField(
-        max_length=100,
-        blank=True,
-        default=""
+    max_length=100,
+    blank=True,
+    default=""
     )
 
     link_url = models.URLField(
-        blank=True,
-        default=""
+    blank=True,
+    default=""
     )
 
-    # ==============================
-    # CTA CALL BUTTON
-    # ==============================
-
     call_label = models.CharField(
-        max_length=100,
-        blank=True,
-        default=""
+    max_length=100,
+    blank=True,
+    default=""
     )
 
     call_number = models.CharField(
-        max_length=30,
-        blank=True,
-        default=""
+    max_length=30,
+    blank=True,
+    default=""
     )
-
     # ==============================
     # CAMPAIGN STATS
     # ==============================

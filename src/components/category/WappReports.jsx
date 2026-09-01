@@ -1,115 +1,175 @@
-import React, { useEffect, useState, useRef, useCallback } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { Calendar } from "lucide-react";
 import * as XLSX from "xlsx";
 
 const BASE = "https://latestchatway.onrender.com/api";
 
-// ─────────────────────────────────────────────
-// 🔔 TOAST CONFIG
-// ─────────────────────────────────────────────
-const TOAST_STYLES = {
-  error: { icon: "✕", accent: "#F86C6B", bg: "linear-gradient(135deg, #fff5f5, #ffffff)", ring: "#F86C6B33" },
-  warning: { icon: "⚠", accent: "#F0AD4E", bg: "linear-gradient(135deg, #fffaf0, #ffffff)", ring: "#F0AD4E33" },
-  success: { icon: "✓", accent: "#4DBD74", bg: "linear-gradient(135deg, #f3fdf7, #ffffff)", ring: "#4DBD7433" },
-  info: { icon: "ℹ", accent: "#20A8D8", bg: "linear-gradient(135deg, #f0f9fd, #ffffff)", ring: "#20A8D833" },
-};
-
-// ─────────────────────────────────────────────
-// 🆕 FILE TYPE HELPER — decides how to preview a file_url
-// ─────────────────────────────────────────────
-const getFileKind = (url) => {
-  const clean = (url || "").split("?")[0].toLowerCase();
-  if (/\.(jpg|jpeg|png|gif|webp|bmp)$/.test(clean)) return "image";
-  if (/\.(mp4|mov|webm|mkv|avi)$/.test(clean)) return "video";
-  if (/\.(pdf)$/.test(clean)) return "pdf";
-  return "file";
-};
-
 const WappReports = () => {
-  const currentUser = JSON.parse(sessionStorage.getItem("user") || "null");
+  const currentUser = JSON.parse(
+    sessionStorage.getItem("user") || "null"
+  );
+
   const role = currentUser?.role?.toLowerCase();
+
   const [filterOpen, setFilterOpen] = useState(false);
   const [selectedFilter, setSelectedFilter] = useState("Today");
+
   const [allEntries, setAllEntries] = useState([]);
   const [entries, setEntries] = useState([]);
+
   const [openRow, setOpenRow] = useState(null);
+
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
   const [showCustom, setShowCustom] = useState(false);
+
   const [perPage, setPerPage] = useState(10);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
-  const [toasts, setToasts] = useState([]);
-  const [lightboxUrl, setLightboxUrl] = useState(null); // 🆕 fullscreen image preview
+
+  const [lightboxUrl, setLightboxUrl] = useState(null);
+
   const intervalRef = useRef(null);
 
-  const filters = ["Today", "Yesterday", "Last 7 Days", "Last 30 Days", "This Month", "Last Month", "Custom Range"];
+  const filters = [
+    "Today",
+    "Yesterday",
+    "Last 7 Days",
+    "Last 30 Days",
+    "This Month",
+    "Last Month",
+    "Custom Range",
+  ];
 
-  // 🔔 Premium toast — replaces alert()
-  const showToast = useCallback((message, type = "error") => {
-    const id = Date.now() + Math.random();
-    setToasts((prev) => [...prev, { id, message, type }]);
-    setTimeout(() => {
-      setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, 3800);
-  }, []);
+  // ==========================================
+  // FILE TYPE DETECTION
+  // ==========================================
 
-  const dismissToast = (id) => setToasts((prev) => prev.filter((t) => t.id !== id));
+  const getFileKind = (url = "") => {
+    const cleanUrl = String(url)
+      .split("?")[0]
+      .toLowerCase();
 
-  // ─────────────────────────────────────────
-  // FETCH FROM DB
-  // ─────────────────────────────────────────
+    if (
+      cleanUrl.endsWith(".jpg") ||
+      cleanUrl.endsWith(".jpeg") ||
+      cleanUrl.endsWith(".png") ||
+      cleanUrl.endsWith(".webp") ||
+      cleanUrl.endsWith(".gif")
+    ) {
+      return "image";
+    }
+
+    if (
+      cleanUrl.endsWith(".mp4") ||
+      cleanUrl.endsWith(".webm") ||
+      cleanUrl.endsWith(".mov") ||
+      cleanUrl.endsWith(".avi")
+    ) {
+      return "video";
+    }
+
+    if (
+      cleanUrl.endsWith(".mp3") ||
+      cleanUrl.endsWith(".wav") ||
+      cleanUrl.endsWith(".ogg") ||
+      cleanUrl.endsWith(".m4a")
+    ) {
+      return "audio";
+    }
+
+    if (cleanUrl.endsWith(".pdf")) {
+      return "pdf";
+    }
+
+    return "file";
+  };
+
+  // ==========================================
+  // FETCH CAMPAIGNS
+  // ==========================================
+
   const fetchCampaigns = async () => {
     if (!currentUser) return;
 
     setLoading(true);
 
     try {
-      const res = await fetch(`${BASE}/my-campaigns/?user_id=${currentUser.id}`);
+      const res = await fetch(
+        `${BASE}/my-campaigns/?user_id=${currentUser.id}`
+      );
+
       const data = await res.json();
 
       if (data.status === "success") {
-        setAllEntries(data.campaigns);
+        setAllEntries(data.campaigns || []);
       }
     } catch (err) {
-      console.error(err);
+      console.error("Campaign Fetch Error:", err);
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   };
 
-  // Page load pe fetch karo
+  // ==========================================
+  // PAGE LOAD
+  // ==========================================
+
   useEffect(() => {
     fetchCampaigns();
   }, []);
 
-  // ─────────────────────────────────────────
-  // AUTO REFRESH — agar koi pending campaign hai
-  // ─────────────────────────────────────────
+  // ==========================================
+  // AUTO REFRESH
+  // ==========================================
+
   useEffect(() => {
-    const hasPending = allEntries.some((e) => e.status === "pending");
+    const hasPending = allEntries.some(
+      (e) =>
+        e.status === "pending" ||
+        e.status === "sending" ||
+        e.status === "scheduled"
+    );
 
     if (hasPending) {
-      // Har 60 second mein check karo
       intervalRef.current = setInterval(() => {
         fetchCampaigns();
       }, 60 * 1000);
-    } else {
-      clearInterval(intervalRef.current);
     }
 
-    return () => clearInterval(intervalRef.current);
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+    };
   }, [allEntries]);
 
-  // ─────────────────────────────────────────
+  // ==========================================
   // FILTER LOGIC
-  // ─────────────────────────────────────────
+  // ==========================================
+
   useEffect(() => {
+    if (selectedFilter === "Custom Range") {
+      if (!customStart || !customEnd) {
+        setEntries(allEntries);
+        setPage(1);
+        return;
+      }
+    }
+
     const now = new Date();
     const IST_OFFSET = 5.5 * 60 * 60 * 1000;
-    const todayIST = new Date(Math.floor((now.getTime() + IST_OFFSET) / 86400000) * 86400000 - IST_OFFSET);
 
-    let start, end;
+    const todayIST = new Date(
+      Math.floor(
+        (now.getTime() + IST_OFFSET) / 86400000
+      ) *
+      86400000 -
+      IST_OFFSET
+    );
+
+    let start;
+    let end;
 
     if (selectedFilter === "Today") {
       start = todayIST.getTime();
@@ -124,501 +184,1405 @@ const WappReports = () => {
       start = todayIST.getTime() - 30 * 86400000;
       end = now.getTime();
     } else if (selectedFilter === "This Month") {
-      const istNow = new Date(now.getTime() + IST_OFFSET);
-      start = new Date(Date.UTC(istNow.getUTCFullYear(), istNow.getUTCMonth(), 1) - IST_OFFSET).getTime();
+      const istNow = new Date(
+        now.getTime() + IST_OFFSET
+      );
+
+      start = new Date(
+        Date.UTC(
+          istNow.getUTCFullYear(),
+          istNow.getUTCMonth(),
+          1
+        ) - IST_OFFSET
+      ).getTime();
+
       end = now.getTime();
     } else if (selectedFilter === "Last Month") {
-      const istNow = new Date(now.getTime() + IST_OFFSET);
-      start = new Date(Date.UTC(istNow.getUTCFullYear(), istNow.getUTCMonth() - 1, 1) - IST_OFFSET).getTime();
-      end = new Date(Date.UTC(istNow.getUTCFullYear(), istNow.getUTCMonth(), 1) - IST_OFFSET).getTime() - 1;
+      const istNow = new Date(
+        now.getTime() + IST_OFFSET
+      );
+
+      start = new Date(
+        Date.UTC(
+          istNow.getUTCFullYear(),
+          istNow.getUTCMonth() - 1,
+          1
+        ) - IST_OFFSET
+      ).getTime();
+
+      end =
+        new Date(
+          Date.UTC(
+            istNow.getUTCFullYear(),
+            istNow.getUTCMonth(),
+            1
+          ) - IST_OFFSET
+        ).getTime() - 1;
     } else if (selectedFilter === "Custom Range") {
-      if (!customStart || !customEnd) { setEntries(allEntries); return; }
       start = new Date(customStart).getTime();
-      end = new Date(customEnd).getTime() + 86399999;
+
+      end =
+        new Date(customEnd).getTime() +
+        86399999;
     }
 
-    setEntries(allEntries.filter((e) => e.rawDate >= start && e.rawDate <= end));
-    setPage(1);
-  }, [selectedFilter, allEntries, customStart, customEnd]);
+    const filtered = allEntries.filter((e) => {
+      let campaignDate = e.rawDate;
 
-  // ─────────────────────────────────────────
+      if (!campaignDate && e.date) {
+        campaignDate = new Date(e.date).getTime();
+      }
+
+      return (
+        campaignDate >= start &&
+        campaignDate <= end
+      );
+    });
+
+    setEntries(filtered);
+    setPage(1);
+  }, [
+    selectedFilter,
+    allEntries,
+    customStart,
+    customEnd,
+  ]);
+
+  // ==========================================
   // DOWNLOAD EXCEL
-  // ─────────────────────────────────────────
+  // ==========================================
+
   const handleDownload = (data) => {
     let rows = [];
 
-    // Completed campaign
-    if (data.numberResults && data.numberResults.length > 0) {
-      // 🔥 Random shuffle — Success/Failed/NonWA/Rejected sab mix ho jayenge
-rows = data.numberResults.map((r) => ({
-  Number: r.number,
-  Status: (r.status || "").toUpperCase(),
-}));
-    }
-
-    // Pending campaign - Admin only
-    else if (role === "admin" && data.numberList && data.numberList.length > 0) {
+    if (
+      data.numberResults &&
+      data.numberResults.length > 0
+    ) {
+      rows = data.numberResults.map((r) => ({
+        Number: r.number,
+        Status: (
+          r.status || ""
+        ).toUpperCase(),
+      }));
+    } else if (
+      role === "admin" &&
+      data.numberList &&
+      data.numberList.length > 0
+    ) {
       rows = data.numberList.map((num) => ({
         Number: num,
         Status: "PENDING",
       }));
-    }
-
-    // No data
-    else {
-      showToast("No number data available for this campaign", "warning");
+    } else {
+      alert(
+        "No number data available for this campaign."
+      );
       return;
     }
 
     const ws = XLSX.utils.json_to_sheet(rows);
-    ws["!cols"] = [{ wch: 20 }, { wch: 15 }];
+
+    ws["!cols"] = [
+      { wch: 20 },
+      { wch: 15 },
+    ];
 
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Campaign Report");
 
-    XLSX.writeFile(wb, `${data.name || "report"}.xlsx`);
-    showToast(`"${data.name || "Report"}" downloaded successfully`, "success");
+    XLSX.utils.book_append_sheet(
+      wb,
+      ws,
+      "Campaign Report"
+    );
+
+    XLSX.writeFile(
+      wb,
+      `${data.name || "report"}.xlsx`
+    );
   };
 
-  const toggleRow = (i) => setOpenRow(openRow === i ? null : i);
-  const totalPages = Math.ceil(entries.length / perPage);
-  const paginated = entries.slice((page - 1) * perPage, page * perPage);
+  // ==========================================
+  // TOGGLE ROW
+  // ==========================================
+
+  const toggleRow = (i) => {
+    setOpenRow(
+      openRow === i ? null : i
+    );
+  };
+
+  const totalPages = Math.ceil(
+    entries.length / perPage
+  );
+
+  const paginated = entries.slice(
+    (page - 1) * perPage,
+    page * perPage
+  );
 
   return (
     <div className="min-h-screen bg-[#f1f1f1]">
 
-      {/* ── PREMIUM UI CSS ───────────────────────── */}
-      <style>{`
-        @keyframes toast-in {
-          from { opacity: 0; transform: translateX(60px) scale(0.95); }
-          to   { opacity: 1; transform: translateX(0)     scale(1);   }
-        }
-        @keyframes toast-shrink {
-          from { width: 100%; }
-          to   { width: 0%; }
-        }
-        .wc-toast { animation: toast-in 0.32s cubic-bezier(0.34, 1.3, 0.64, 1) forwards; }
-        .wc-toast-bar { animation: toast-shrink 3.8s linear forwards; }
-
-        @keyframes row-expand {
-          from { opacity: 0; transform: translateY(-6px); }
-          to   { opacity: 1; transform: translateY(0); }
-        }
-        .wr-expand-row { animation: row-expand 0.22s ease forwards; }
-
-        .wr-body-row { transition: background-color 0.15s ease; }
-        .wr-body-row:hover { background-color: #eef6fb !important; }
-
-        .wr-toggle-btn {
-          transition: transform 0.18s cubic-bezier(0.34,1.4,0.64,1), background-color 0.15s ease;
-        }
-        .wr-toggle-btn:hover { transform: scale(1.15); background-color: #3ea862 !important; }
-        .wr-toggle-btn:active { transform: scale(0.92); }
-
-        .wr-download-btn {
-          transition: transform 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
-        }
-        .wr-download-btn:hover:not(:disabled) {
-          transform: translateY(-1px);
-          box-shadow: 0 4px 12px #20A8D855;
-          background-color: #1b8db8;
-        }
-        .wr-download-btn:active:not(:disabled) { transform: translateY(0) scale(0.97); }
-
-        .wr-refresh-btn {
-          transition: transform 0.15s ease, background-color 0.15s ease;
-        }
-        .wr-refresh-btn:hover { background-color: #e2e8ee !important; }
-        .wr-refresh-btn:active { transform: scale(0.96); }
-        .wr-refresh-spin { animation: wr-spin 0.7s linear; }
-        @keyframes wr-spin { to { transform: rotate(360deg); } }
-
-        .wr-filter-pill {
-          transition: transform 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
-        }
-        .wr-filter-pill:hover {
-          transform: translateY(-1px);
-          box-shadow: 0 4px 14px #4DBD7455;
-          background-color: #3ea862 !important;
-        }
-
-        @keyframes wr-dropdown-in {
-          from { opacity: 0; transform: translateY(-6px) scale(0.97); }
-          to   { opacity: 1; transform: translateY(0)     scale(1);   }
-        }
-        .wr-dropdown { animation: wr-dropdown-in 0.16s ease forwards; transform-origin: top right; }
-        .wr-dropdown-item { transition: background-color 0.12s ease, padding-left 0.12s ease; }
-        .wr-dropdown-item:hover { padding-left: 20px; }
-
-        .wr-stat-pill {
-          transition: transform 0.15s ease;
-          border-radius: 6px;
-        }
-        .wr-stat-pill:hover { transform: scale(1.05); }
-
-        .wr-input {
-          transition: border-color 0.18s ease, box-shadow 0.18s ease;
-        }
-        .wr-input:focus {
-          border-color: #20A8D8 !important;
-          box-shadow: 0 0 0 3px #20A8D822;
-          outline: none;
-        }
-
-        .wr-page-btn {
-          transition: transform 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
-        }
-        .wr-page-btn:hover:not(:disabled) {
-          background-color: #20A8D8 !important;
-          color: #fff !important;
-          border-color: #20A8D8 !important;
-          box-shadow: 0 3px 10px #20A8D844;
-        }
-        .wr-page-btn:active:not(:disabled) { transform: scale(0.96); }
-
-        @keyframes wr-pulse-soft {
-          0%,100% { opacity: 1; }
-          50%     { opacity: 0.55; }
-        }
-        .wr-pending-badge { animation: wr-pulse-soft 1.8s ease-in-out infinite; }
-
-        @keyframes wr-loading-shimmer {
-          0%   { opacity: 0.4; }
-          50%  { opacity: 0.9; }
-          100% { opacity: 0.4; }
-        }
-        .wr-loading-dot { animation: wr-loading-shimmer 1.1s ease-in-out infinite; }
-
-        /* 🆕 File thumbnail preview */
-        .wr-file-thumb {
-          transition: transform 0.15s ease, box-shadow 0.15s ease;
-          cursor: pointer;
-        }
-        .wr-file-thumb:hover {
-          transform: scale(1.06);
-          box-shadow: 0 4px 14px rgba(0,0,0,0.18);
-        }
-        @keyframes wr-lightbox-in {
-          from { opacity: 0; }
-          to   { opacity: 1; }
-        }
-        .wr-lightbox { animation: wr-lightbox-in 0.18s ease forwards; }
-      `}</style>
-
-      {/* ══════════════════════════════════════════ */}
-      {/* 🔔 TOAST STACK                             */}
-      {/* ══════════════════════════════════════════ */}
-      <div className="fixed top-5 right-5 z-[70] flex flex-col gap-2.5 w-[320px] max-w-[90vw]">
-        {toasts.map((t) => {
-          const style = TOAST_STYLES[t.type] || TOAST_STYLES.error;
-          return (
-            <div
-              key={t.id}
-              className="wc-toast"
-              style={{
-                background: style.bg,
-                border: `1px solid ${style.accent}33`,
-                borderLeft: `4px solid ${style.accent}`,
-                borderRadius: 12,
-                boxShadow: `0 10px 30px rgba(0,0,0,0.12), 0 0 0 4px ${style.ring}`,
-                padding: "12px 14px",
-                display: "flex",
-                alignItems: "flex-start",
-                gap: 10,
-                position: "relative",
-                overflow: "hidden",
-              }}
-            >
-              <div style={{
-                width: 22, height: 22, borderRadius: "50%",
-                background: style.accent, color: "#fff",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: 12, fontWeight: 800, flexShrink: 0, marginTop: 1,
-              }}>{style.icon}</div>
-              <div style={{ flex: 1, fontSize: 13, color: "#2b3948", lineHeight: 1.4, fontWeight: 500 }}>
-                {t.message}
-              </div>
-              <button
-                onClick={() => dismissToast(t.id)}
-                style={{
-                  background: "transparent", border: "none", cursor: "pointer",
-                  color: "#9aa5b1", fontSize: 15, lineHeight: 1, padding: 0, flexShrink: 0,
-                }}
-              >✕</button>
-              <div style={{
-                position: "absolute", bottom: 0, left: 0, height: 3,
-                background: style.accent, opacity: 0.55,
-              }} className="wc-toast-bar" />
-            </div>
-          );
-        })}
-      </div>
-
-      {/* ══════════════════════════════════════════ */}
-      {/* 🆕 IMAGE LIGHTBOX — click-to-zoom fullscreen */}
-      {/* ══════════════════════════════════════════ */}
-      {lightboxUrl && (
-        <div
-          className="wr-lightbox fixed inset-0 z-[80] flex items-center justify-center p-6"
-          style={{ backgroundColor: "rgba(0,0,0,0.82)" }}
-          onClick={() => setLightboxUrl(null)}
-        >
-          <img
-            src={lightboxUrl}
-            alt="preview"
-            className="max-w-[90vw] max-h-[90vh] rounded-lg shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          />
-          <button
-            onClick={() => setLightboxUrl(null)}
-            className="absolute top-5 right-6 text-white text-3xl leading-none"
-          >✕</button>
-        </div>
-      )}
+      {/* ================================= */}
+      {/* TOP NOTE */}
+      {/* ================================= */}
 
       <div className="bg-gray-200">
         <marquee className="text-red-600 py-2 font-normal text-[18px]">
-          NOTE = All campaigns will be delivered Between 8A.M to 6P.M - (Monday to Saturday) on working days.
+          NOTE = All campaigns will be delivered Between
+          8A.M to 6P.M - (Monday to Saturday) on
+          working days.
         </marquee>
       </div>
 
       <div className="p-4">
+
         <div className="bg-white border border-gray-300 rounded">
 
+          {/* ================================= */}
           {/* HEADER */}
+          {/* ================================= */}
+
           <div className="px-4 py-3 border-b flex items-center justify-between">
+
             <div className="flex items-center gap-3">
-              <h2 className="font-semibold text-[18px] text-gray-800">Whatsapp Report</h2>
-              {/* 🔥 Manual refresh button */}
+
+              <h2 className="font-semibold text-[18px] text-gray-800">
+                Whatsapp Report
+              </h2>
+
               <button
                 onClick={fetchCampaigns}
-                className="wr-refresh-btn bg-gray-100 border border-gray-300 text-gray-600 px-3 py-1 rounded text-sm flex items-center gap-1"
+                className="bg-gray-100 hover:bg-gray-200 border border-gray-300 text-gray-600 px-3 py-1 rounded text-sm flex items-center gap-1"
               >
-                <span className={loading ? "wr-refresh-spin inline-block" : "inline-block"}>🔄</span> Refresh
+                🔄 Refresh
               </button>
-              {allEntries.some((e) => e.status === "pending") && (
-                <span className="wr-pending-badge bg-orange-100 text-orange-600 border border-orange-300 px-3 py-1 rounded text-xs">
-                  ⏳ Your Pending Campaign Auto-Refresh
-                </span>
-              )}
+
+              {allEntries.some(
+                (e) =>
+                  e.status === "pending"
+              ) && (
+                  <span className="bg-orange-100 text-orange-600 border border-orange-300 px-3 py-1 rounded text-xs animate-pulse">
+                    ⏳ Your Pending Campaign Auto-Refresh
+                  </span>
+                )}
+
             </div>
 
             <div className="relative">
+
               <div
-                onClick={() => setFilterOpen(!filterOpen)}
-                className="wr-filter-pill flex items-center gap-2 bg-[#4DBD74] text-white px-4 py-2 rounded cursor-pointer"
+                onClick={() =>
+                  setFilterOpen(!filterOpen)
+                }
+                className="flex items-center gap-2 bg-[#4DBD74] text-white px-4 py-2 rounded cursor-pointer"
               >
-                <Calendar size={16} /> {selectedFilter}
+                <Calendar size={16} />
+                {selectedFilter}
               </div>
+
               {filterOpen && (
-                <div className="wr-dropdown absolute right-0 mt-2 w-52 bg-white border border-gray-300 rounded shadow-lg z-50 overflow-hidden">
+                <div className="absolute right-0 mt-2 w-52 bg-white border border-gray-300 rounded shadow z-50">
+
                   {filters.map((f, i) => (
-                    <div key={i} onClick={() => { setSelectedFilter(f); setFilterOpen(false); setShowCustom(f === "Custom Range"); }}
-                      className="wr-dropdown-item px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm">
+                    <div
+                      key={i}
+                      onClick={() => {
+                        setSelectedFilter(f);
+                        setFilterOpen(false);
+                        setShowCustom(
+                          f === "Custom Range"
+                        );
+                      }}
+                      className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm"
+                    >
                       {f}
                     </div>
                   ))}
+
                 </div>
               )}
+
             </div>
+
           </div>
 
+          {/* ================================= */}
           {/* CUSTOM DATE */}
+          {/* ================================= */}
+
           {showCustom && (
             <div className="px-4 py-3 flex gap-3 items-center border-b bg-gray-50">
-              <label className="text-sm">From:</label>
-              <input type="date" value={customStart} onChange={(e) => setCustomStart(e.target.value)}
-                className="wr-input border border-gray-300 px-2 py-1 rounded outline-none text-sm" />
-              <label className="text-sm">To:</label>
-              <input type="date" value={customEnd} onChange={(e) => setCustomEnd(e.target.value)}
-                className="wr-input border border-gray-300 px-2 py-1 rounded outline-none text-sm" />
+
+              <label className="text-sm">
+                From:
+              </label>
+
+              <input
+                type="date"
+                value={customStart}
+                onChange={(e) =>
+                  setCustomStart(
+                    e.target.value
+                  )
+                }
+                className="border border-gray-300 px-2 py-1 rounded outline-none text-sm"
+              />
+
+              <label className="text-sm">
+                To:
+              </label>
+
+              <input
+                type="date"
+                value={customEnd}
+                onChange={(e) =>
+                  setCustomEnd(
+                    e.target.value
+                  )
+                }
+                className="border border-gray-300 px-2 py-1 rounded outline-none text-sm"
+              />
+
             </div>
           )}
 
           <div className="p-4">
+
+            {/* ================================= */}
+            {/* SHOW ENTRIES */}
+            {/* ================================= */}
+
             <div className="mb-3 flex items-center gap-2 text-sm">
+
               <span>Show</span>
-              <select className="wr-input border border-gray-300 px-2 py-1 rounded outline-none"
-                value={perPage} onChange={(e) => { setPerPage(Number(e.target.value)); setPage(1); }}>
-                <option value={10}>10</option>
-                <option value={25}>25</option>
-                <option value={50}>50</option>
+
+              <select
+                className="border border-gray-300 px-2 py-1 rounded outline-none"
+                value={perPage}
+                onChange={(e) => {
+                  setPerPage(
+                    Number(e.target.value)
+                  );
+
+                  setPage(1);
+                }}
+              >
+                <option value={10}>
+                  10
+                </option>
+
+                <option value={25}>
+                  25
+                </option>
+
+                <option value={50}>
+                  50
+                </option>
               </select>
+
               <span>entries</span>
+
             </div>
 
+            {/* ================================= */}
             {/* TABLE */}
-            <div className="border border-gray-300">
+            {/* ================================= */}
+
+            <div className="border border-gray-300 overflow-x-auto">
+
               <table className="w-full text-[15px] border-collapse text-center">
-                <thead className="bg-[#20a8d8] text-white">
+
+                <thead className="bg-[#3395b8] text-white">
+
                   <tr>
+
                     <th className="px-2 py-2 border-r border-gray-300"></th>
-                    <th className="px-3 py-2 border-r border-gray-300">Campname</th>
-                    <th className="px-3 py-2 border-r border-gray-300">Number</th>
-                    <th className="px-3 py-2 border-r border-gray-300">Message</th>
-                    <th className="px-3 py-2 border-r border-gray-300">Status</th>
-                    <th className="px-3 py-2 border-r border-gray-300">Submit Date</th>
-                    <th className="px-3 py-2">Download</th>
+
+                    <th className="px-3 py-2 border-r border-gray-300">
+                      Campname
+                    </th>
+
+                    <th className="px-3 py-2 border-r border-gray-300">
+                      Number
+                    </th>
+
+                    <th className="px-3 py-2 border-r border-gray-300">
+                      Message
+                    </th>
+
+                    <th className="px-3 py-2 border-r border-gray-300">
+                      Status
+                    </th>
+
+                    <th className="px-3 py-2 border-r border-gray-300">
+                      Submit Date
+                    </th>
+
+                    <th className="px-3 py-2">
+                      Download
+                    </th>
+
                   </tr>
+
                 </thead>
 
                 <tbody>
+
+                  {/* LOADING */}
+
                   {loading ? (
+
                     <tr>
-                      <td colSpan="7" className="py-6 text-gray-500">
-                        <span className="wr-loading-dot">⏳</span> Loading...
+                      <td
+                        colSpan="7"
+                        className="py-6 text-gray-500"
+                      >
+                        ⏳ Loading...
                       </td>
                     </tr>
-                  ) : paginated.length === 0 ? (
-                    <tr>
-                      <td colSpan="7" className="py-6 text-gray-600">No data available in table</td>
-                    </tr>
-                  ) : (
-                    paginated.map((e, i) => (
-                      <React.Fragment key={i}>
-                        <tr className="wr-body-row border-t bg-gray-200">
-                          <td className="border-r border-gray-300">
-                            <button onClick={() => toggleRow(i)}
-                              className="wr-toggle-btn bg-[#4dbd74] text-white w-5 h-6 rounded-full">
-                              {openRow === i ? "-" : "+"}
-                            </button>
-                          </td>
-                          <td className="px-3 py-2 border-r border-gray-300">{e.name}</td>
-                          <td className="px-3 py-2 border-r border-gray-300">{e.total}</td>
-                          <td className="px-3 py-2 border-r border-gray-300 max-w-[200px] truncate">{e.message}</td>
 
-                          {/* 🔥 STATUS BADGE */}
+                  ) : paginated.length === 0 ? (
+
+                    <tr>
+                      <td
+                        colSpan="7"
+                        className="py-6 text-gray-600"
+                      >
+                        No data available in table
+                      </td>
+                    </tr>
+
+                  ) : (
+
+                    paginated.map((e, i) => (
+
+                      <React.Fragment
+                        key={i}
+                      >
+
+                        {/* MAIN ROW */}
+
+                        <tr className="border-t bg-gray-200">
+
+                          <td className="border-r border-gray-300">
+
+                            <button
+                              onClick={() =>
+                                toggleRow(i)
+                              }
+                              style={{
+                                background: "#e74c3c",
+                                color: "#fff",
+                                width: "22px",
+                                height: "22px",
+                                borderRadius: "50%",
+                                border: "2px solid #fff",
+                                cursor: "pointer",
+                                fontWeight: "bold",
+                              }}
+                            >
+                              {openRow === i
+                                ? "−"
+                                : "+"}
+                            </button>
+
+                          </td>
+
                           <td className="px-3 py-2 border-r border-gray-300">
+                            {e.name}
+                          </td>
+
+                          <td className="px-3 py-2 border-r border-gray-300">
+                            {e.total}
+                          </td>
+
+                          <td className="px-3 py-2 border-r border-gray-300 max-w-[500px] text-left">
+                            {e.message}
+                          </td>
+
+                          <td className="px-3 py-2 border-r border-gray-300">
+
                             {e.status === "pending" ? (
-                              <span className="wr-pending-badge bg-orange-400 text-white px-2 py-1 text-xs rounded-full">
-                                ⏳ PENDING
+
+                              <span className="bg-orange-400 text-white px-2 py-1 text-xs rounded">
+                                PENDING
                               </span>
+
+                            ) : e.status === "rejected" ? (
+
+                              <span className="bg-[#4DBD74] text-white px-2 py-1 text-xs rounded">
+                                REJECTED
+                              </span>
+
                             ) : (
-                              <span className="bg-[#4dbd74] text-white px-2 py-1 text-xs rounded-full">
+
+                              <span className="bg-[#4DBD74] text-white px-2 py-1 text-xs rounded">
                                 COMPLETED
                               </span>
+
                             )}
+
                           </td>
 
-                          <td className="px-3 py-2 border-r border-gray-300">{e.date}</td>
+                          <td className="px-3 py-2 border-r border-gray-300">
+                            {e.date}
+                          </td>
+
                           <td className="px-3 py-2">
-                            {(e.status === "completed" || role === "admin") ? (
+
+                            {(e.status ===
+                              "completed" ||
+                              e.status ===
+                              "rejected" ||
+                              role === "admin") ? (
+
                               <button
-                                onClick={() => handleDownload(e)}
-                                className="wr-download-btn bg-[#20A8D8] text-white px-3 py-1 rounded-full text-xs"
+                                onClick={() =>
+                                  handleDownload(e)
+                                }
+                                className="bg-[#3395b8] text-white px-4 py-2 rounded text-xs"
                               >
                                 Download
                               </button>
+
                             ) : (
+
                               <button
                                 disabled
-                                className="bg-gray-300 text-gray-600 px-3 py-1 rounded-full text-xs cursor-not-allowed"
+                                className="bg-gray-300 text-gray-600 px-3 py-1 rounded text-xs cursor-not-allowed"
                               >
                                 Pending
                               </button>
+
                             )}
+
                           </td>
+
                         </tr>
 
-                        {/* EXPANDED ROW */}
+                        {/* ================================= */}
+                        {/* EXPANDED REPORT */}
+                        {/* ================================= */}
+
                         {openRow === i && (
-                          <tr className="wr-expand-row">
-                            <td colSpan="7" className="bg-gray-100">
-                              <div className="p-3 text-left">
 
-                                {/* 🆕 Files — thumbnail preview instead of plain "File 1" links */}
-                                {(e.file_urls || []).length > 0 && (
-                                  <div className="mb-3">
-                                    <b>Files:</b>
-                                    <div className="flex gap-3 mt-2 flex-wrap justify-center">
-                                      {e.file_urls.map((url, fi) => {
-                                        const kind = getFileKind(url);
+                          <tr>
 
-                                        if (kind === "image") {
-                                          return (
-                                            <img
-                                              key={fi}
-                                              src={url}
-                                              alt={`file-${fi + 1}`}
-                                              onClick={() => setLightboxUrl(url)}
-                                              className="wr-file-thumb w-[80px] h-[80px] object-cover rounded border border-gray-300 bg-white"
-                                            />
-                                          );
-                                        }
+                            <td
+                              colSpan="7"
+                              style={{
+                                background:
+                                  "#f3f4f6",
+                                padding: 0,
+                              }}
+                            >
 
-                                        if (kind === "video") {
-                                          return (
-                                            <a key={fi} href={url} target="_blank" rel="noreferrer"
-                                              className="wr-file-thumb flex flex-col items-center justify-center w-[80px] h-[80px] rounded border border-gray-300 bg-white text-gray-500">
-                                              <span className="text-2xl">🎬</span>
-                                              <span className="text-[10px] mt-1">Video</span>
-                                            </a>
-                                          );
-                                        }
+                              <div
+                                style={{
+                                  width: "100%",
+                                  border:
+                                    "1px solid #cbd5e1",
+                                  background:
+                                    "#f8fafc",
+                                }}
+                              >
 
-                                        if (kind === "pdf") {
-                                          return (
-                                            <a key={fi} href={url} target="_blank" rel="noreferrer"
-                                              className="wr-file-thumb flex flex-col items-center justify-center w-[80px] h-[80px] rounded border border-gray-300 bg-white text-gray-500">
-                                              <span className="text-2xl">📄</span>
-                                              <span className="text-[10px] mt-1">PDF</span>
-                                            </a>
-                                          );
-                                        }
+                                {/* ================= IMAGE / DP ================= */}
 
-                                        return (
-                                          <a key={fi} href={url} target="_blank" rel="noreferrer"
-                                            className="wr-file-thumb flex flex-col items-center justify-center w-[80px] h-[80px] rounded border border-gray-300 bg-white text-gray-500">
-                                            <span className="text-2xl">📎</span>
-                                            <span className="text-[10px] mt-1">File {fi + 1}</span>
-                                          </a>
-                                        );
-                                      })}
-                                    </div>
+                                <div
+                                  style={{
+                                    display:
+                                      "grid",
+                                    gridTemplateColumns:
+                                      "100px 1fr",
+                                    borderBottom:
+                                      "1px solid #cbd5e1",
+                                    minHeight:
+                                      "20px",
+                                  }}
+                                >
+
+                                  <div
+                                    style={{
+                                      padding:
+                                        "10px",
+                                      fontWeight:
+                                        "700",
+                                      borderRight:
+                                        "1px solid #cbd5e1",
+                                      background:
+                                        "#f1f5f9",
+                                    }}
+                                  >
+                                    Image:
                                   </div>
-                                )}
 
-                                {/* Stats */}
-                                <div className="flex gap-2 mt-2 flex-wrap justify-center">
-                                  <span className="wr-stat-pill bg-[#20A8D8] text-white px-3 py-1">TOTAL {e.total || 0}</span>
-                                  <span className="wr-stat-pill bg-[#c3ad09] text-white px-3 py-1">NONWA {e.nonwa || 0}</span>
-                                  <span className="wr-stat-pill bg-[#F86C6B] text-white px-3 py-1">FAILED {e.failed || 0}</span>
-                                  <span className="wr-stat-pill bg-[#f97316] text-white px-3 py-1">REJECTED {e.rejected || 0}</span>
-                                  <span className="wr-stat-pill bg-[#4DBD74] text-white px-3 py-1">SUCCESS {e.success || 0}</span>
+                                  <div
+                                    style={{
+                                      padding:
+                                        "9px",
+                                      display:
+                                        "flex",
+                                      alignItems:
+                                        "center",
+                                      gap:
+                                        "10px",
+                                      flexWrap:
+                                        "wrap",
+                                    }}
+                                  >
+
+                                    {/* DP */}
+
+                                    {e.dp_url && (
+
+                                      <img
+                                        src={
+                                          e.dp_url
+                                        }
+                                        alt="Campaign DP"
+                                        onClick={() =>
+                                          setLightboxUrl(
+                                            e.dp_url
+                                          )
+                                        }
+                                        style={{
+                                          width:
+                                            "200px",
+                                          height:
+                                            "200px",
+                                          objectFit:
+                                            "cover",
+                                          cursor:
+                                            "pointer",
+                                          border:
+                                            "1px solid #ccc",
+                                        }}
+                                      />
+
+                                    )}
+
+                                    {/* IMAGE FILES */}
+
+                                    {(e.file_urls ||
+                                      [])
+                                      .filter(
+                                        (url) =>
+                                          getFileKind(
+                                            url
+                                          ) ===
+                                          "image"
+                                      )
+                                      .map(
+                                        (
+                                          url,
+                                          fi
+                                        ) => (
+
+                                          <img
+                                            key={
+                                              fi
+                                            }
+                                            src={
+                                              url
+                                            }
+                                            alt={`Attachment ${fi}`}
+                                            onClick={() =>
+                                              setLightboxUrl(
+                                                url
+                                              )
+                                            }
+                                            style={{
+                                              width:
+                                                "200px",
+                                              height:
+                                                "200px",
+                                              objectFit:
+                                                "cover",
+                                              cursor:
+                                                "pointer",
+                                              border:
+                                                "1px solid #ccc",
+                                            }}
+                                          />
+
+                                        )
+                                      )}
+
+                                    {!e.dp_url &&
+                                      !(e.file_urls ||
+                                        []).some(
+                                          (url) =>
+                                            getFileKind(
+                                              url
+                                            ) ===
+                                            "image"
+                                        ) && (
+                                        <span
+                                          style={{
+                                            color:
+                                              "#777",
+                                          }}
+                                        >
+                                          No Image
+                                        </span>
+                                      )}
+
+                                  </div>
+
                                 </div>
 
-                                {/* Pending message */}
-                                {e.status === "pending" && (
-                                  <div className="mt-3 text-center text-orange-500 text-sm font-medium">
-                                    ⏳Your Campaign Is Processing
+                                {/* ================= VIDEO ================= */}
+
+                                <div
+                                  style={{
+                                    display:
+                                      "grid",
+                                    gridTemplateColumns:
+                                      "100px 1fr",
+                                    borderBottom:
+                                      "1px solid #cbd5e1",
+                                    minHeight:
+                                      "20px",
+                                  }}
+                                >
+
+                                  <div
+                                    style={{
+                                      padding:
+                                        "10px",
+                                      fontWeight:
+                                        "700",
+                                      borderRight:
+                                        "1px solid #cbd5e1",
+                                      background:
+                                        "#f1f5f9",
+                                    }}
+                                  >
+                                    Video:
                                   </div>
-                                )}
+
+                                  <div
+                                    style={{
+                                      padding:
+                                        "8px",
+                                      display:
+                                        "flex",
+                                      gap:
+                                        "10px",
+                                      flexWrap:
+                                        "wrap",
+                                    }}
+                                  >
+
+                                    {(e.file_urls ||
+                                      [])
+                                      .filter(
+                                        (url) =>
+                                          getFileKind(
+                                            url
+                                          ) ===
+                                          "video"
+                                      )
+                                      .map(
+                                        (
+                                          url,
+                                          fi
+                                        ) => (
+
+                                          <video
+                                            key={
+                                              fi
+                                            }
+                                            src={
+                                              url
+                                            }
+                                            controls
+                                            style={{
+                                              width:
+                                                "350px",
+                                              maxWidth:
+                                                "100%",
+                                              border:
+                                                "1px solid #ccc",
+                                            }}
+                                          />
+
+                                        )
+                                      )}
+
+                                  </div>
+
+                                </div>
+
+                                {/* ================= AUDIO ================= */}
+
+                                <div
+                                  style={{
+                                    display:
+                                      "grid",
+                                    gridTemplateColumns:
+                                      "100px 1fr",
+                                    borderBottom:
+                                      "1px solid #cbd5e1",
+                                    minHeight:
+                                      "20px",
+                                  }}
+                                >
+
+                                  <div
+                                    style={{
+                                      padding:
+                                        "10px",
+                                      fontWeight:
+                                        "700",
+                                      borderRight:
+                                        "1px solid #cbd5e1",
+                                      background:
+                                        "#f1f5f9",
+                                    }}
+                                  >
+                                    Audio:
+                                  </div>
+
+                                  <div
+                                    style={{
+                                      padding:
+                                        "8px",
+                                      display:
+                                        "flex",
+                                      gap:
+                                        "10px",
+                                      flexWrap:
+                                        "wrap",
+                                    }}
+                                  >
+
+                                    {(e.file_urls ||
+                                      [])
+                                      .filter(
+                                        (url) =>
+                                          getFileKind(
+                                            url
+                                          ) ===
+                                          "audio"
+                                      )
+                                      .map(
+                                        (
+                                          url,
+                                          fi
+                                        ) => (
+
+                                          <audio
+                                            key={
+                                              fi
+                                            }
+                                            src={
+                                              url
+                                            }
+                                            controls
+                                          />
+
+                                        )
+                                      )}
+
+                                  </div>
+
+                                </div>
+
+                                {/* ================= PDF ================= */}
+
+                                <div
+                                  style={{
+                                    display:
+                                      "grid",
+                                    gridTemplateColumns:
+                                      "100px 1fr",
+                                    borderBottom:
+                                      "1px solid #cbd5e1",
+                                    minHeight:
+                                      "20px",
+                                  }}
+                                >
+
+                                  <div
+                                    style={{
+                                      padding:
+                                        "10px",
+                                      fontWeight:
+                                        "700",
+                                      borderRight:
+                                        "1px solid #cbd5e1",
+                                      background:
+                                        "#f1f5f9",
+                                    }}
+                                  >
+                                    PDF:
+                                  </div>
+
+                                  <div
+                                    style={{
+                                      padding:
+                                        "8px",
+                                      display:
+                                        "flex",
+                                      gap:
+                                        "10px",
+                                      flexWrap:
+                                        "wrap",
+                                    }}
+                                  >
+
+                                    {(e.file_urls ||
+                                      [])
+                                      .filter(
+                                        (url) =>
+                                          getFileKind(
+                                            url
+                                          ) ===
+                                          "pdf"
+                                      )
+                                      .map(
+                                        (
+                                          url,
+                                          fi
+                                        ) => (
+
+                                          <a
+                                            key={
+                                              fi
+                                            }
+                                            href={
+                                              url
+                                            }
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            style={{
+                                              display:
+                                                "inline-flex",
+                                              alignItems:
+                                                "center",
+                                              padding:
+                                                "9px 15px",
+                                              background:
+                                                "#dc2626",
+                                              color:
+                                                "#fff",
+                                              textDecoration:
+                                                "none",
+                                              borderRadius:
+                                                "5px",
+                                              fontWeight:
+                                                "600",
+                                            }}
+                                          >
+                                            📄 Open PDF
+                                          </a>
+
+                                        )
+                                      )}
+
+                                  </div>
+
+                                </div>
+
+                                {/* ================= LINK BUTTON ================= */}
+
+                                <div
+                                  style={{
+                                    display:
+                                      "grid",
+                                    gridTemplateColumns:
+                                      "100px 1fr",
+                                    borderBottom:
+                                      "1px solid #cbd5e1",
+                                    minHeight:
+                                      "25px",
+                                  }}
+                                >
+
+                                  <div
+                                    style={{
+                                      padding:
+                                        "10px",
+                                      fontWeight:
+                                        "700",
+                                      borderRight:
+                                        "1px solid #cbd5e1",
+                                      background:
+                                        "#f1f5f9",
+                                    }}
+                                  >
+                                    Link Button:
+                                  </div>
+
+                                  <div
+                                    style={{
+                                      padding:
+                                        "8px",
+                                      display:
+                                        "flex",
+                                      alignItems:
+                                        "center",
+                                      gap:
+                                        "10px",
+                                      flexWrap:
+                                        "wrap",
+                                    }}
+                                  >
+
+                                    {e.link_url ? (
+
+                                      <>
+
+                                        <a
+                                          href={
+                                            e.link_url
+                                          }
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          style={{
+                                            display:
+                                              "inline-flex",
+                                            alignItems:
+                                              "center",
+                                            justifyContent:
+                                              "center",
+                                            padding:
+                                              "10px 22px",
+                                            background:
+                                              "#20a8d8",
+                                            color:
+                                              "#ffffff",
+                                            textDecoration:
+                                              "none",
+                                            borderRadius:
+                                              "6px",
+                                            fontWeight:
+                                              "700",
+                                            fontSize:
+                                              "14px",
+                                            cursor:
+                                              "pointer",
+                                            border:
+                                              "none",
+                                            boxShadow:
+                                              "0 2px 5px rgba(0,0,0,0.2)",
+                                          }}
+                                        >
+                                          🔗{" "}
+                                          {e.link_label ||
+                                            "Visit Now"}
+                                        </a>
+
+                                        <span
+                                          style={{
+                                            color:
+                                              "#555",
+                                            fontSize:
+                                              "13px",
+                                            wordBreak:
+                                              "break-all",
+                                          }}
+                                        >
+                                          {e.link_url}
+                                        </span>
+
+                                      </>
+
+                                    ) : (
+
+                                      <span
+                                        style={{
+                                          color:
+                                            "#777",
+                                        }}
+                                      >
+                                        No Link Button
+                                      </span>
+
+                                    )}
+
+                                  </div>
+
+                                </div>
+
+                                {/* ================= CALL BUTTON ================= */}
+
+                                <div
+                                  style={{
+                                    display:
+                                      "grid",
+                                    gridTemplateColumns:
+                                      "100px 1fr",
+                                    borderBottom:
+                                      "1px solid #cbd5e1",
+                                    minHeight:
+                                      "25px",
+                                  }}
+                                >
+
+                                  <div
+                                    style={{
+                                      padding:
+                                        "10px",
+                                      fontWeight:
+                                        "700",
+                                      borderRight:
+                                        "1px solid #cbd5e1",
+                                      background:
+                                        "#f1f5f9",
+                                    }}
+                                  >
+                                    Call Button:
+                                  </div>
+
+                                  <div
+                                    style={{
+                                      padding:
+                                        "8px",
+                                      display:
+                                        "flex",
+                                      alignItems:
+                                        "center",
+                                      gap:
+                                        "10px",
+                                      flexWrap:
+                                        "wrap",
+                                    }}
+                                  >
+
+                                    {e.call_number ? (
+
+                                      <>
+
+                                        <a
+                                          href={`tel:${e.call_number}`}
+                                          style={{
+                                            display:
+                                              "inline-flex",
+                                            alignItems:
+                                              "center",
+                                            justifyContent:
+                                              "center",
+                                            padding:
+                                              "10px 22px",
+                                            background:
+                                              "#4dbd74",
+                                            color:
+                                              "#ffffff",
+                                            textDecoration:
+                                              "none",
+                                            borderRadius:
+                                              "6px",
+                                            fontWeight:
+                                              "700",
+                                            fontSize:
+                                              "14px",
+                                            cursor:
+                                              "pointer",
+                                            border:
+                                              "none",
+                                            boxShadow:
+                                              "0 2px 5px rgba(0,0,0,0.2)",
+                                          }}
+                                        >
+                                          📞{" "}
+                                          {e.call_label ||
+                                            "Call Now"}
+                                        </a>
+
+                                        <span
+                                          style={{
+                                            color:
+                                              "#555",
+                                            fontSize:
+                                              "14px",
+                                          }}
+                                        >
+                                          {e.call_number}
+                                        </span>
+
+                                      </>
+
+                                    ) : (
+
+                                      <span
+                                        style={{
+                                          color:
+                                            "#777",
+                                        }}
+                                      >
+                                        No Call Button
+                                      </span>
+
+                                    )}
+
+                                  </div>
+
+                                </div>
+
+                                {/* ================= STATS ================= */}
+
+                                <div
+                                  style={{
+                                    padding:
+                                      "8px",
+                                    display:
+                                      "flex",
+                                    gap:
+                                      "2px",
+                                    flexWrap:
+                                      "wrap",
+                                  }}
+                                >
+
+                                  <span
+                                    style={{
+                                      display: "inline-flex",
+                                      background: "#2993b7",
+                                      color: "#fff",
+                                      padding: "6px 10px",
+                                      fontWeight: "700",
+                                      fontSize: "12px",
+                                    }}
+                                  >
+                                    TOTAL
+                                    <span
+                                      style={{
+                                        marginLeft:
+                                          "8px",
+                                      }}
+                                    >
+                                      {e.total ||
+                                        0}
+                                    </span>
+                                  </span>
+
+                                  <span
+                                    style={{
+                                      display: "inline-flex",
+                                      background: "#2993b7",
+                                      color: "#fff",
+                                      padding: "6px 10px",
+                                      fontWeight: "700",
+                                      fontSize: "12px",
+                                    }}
+                                  >
+                                    NONWA
+                                    <span
+                                      style={{
+                                        marginLeft:
+                                          "8px",
+                                      }}
+                                    >
+                                      {e.nonwa ||
+                                        0}
+                                    </span>
+                                  </span>
+
+                                  <span
+                                    style={{
+                                      display: "inline-flex",
+                                      background: "#2993b7",
+                                      color: "#fff",
+                                      padding: "6px 10px",
+                                      fontWeight: "700",
+                                      fontSize: "12px",
+                                    }}
+                                  >
+                                    FAILED
+                                    <span
+                                      style={{
+                                        marginLeft:
+                                          "8px",
+                                      }}
+                                    >
+                                      {e.failed ||
+                                        0}
+                                    </span>
+                                  </span>
+
+                                  <span
+                                    style={{
+                                      display: "inline-flex",
+                                      background: "#2993b7",
+                                      color: "#fff",
+                                      padding: "6px 10px",
+                                      fontWeight: "700",
+                                      fontSize: "12px",
+                                    }}
+                                  >
+                                    REJECTED
+                                    <span
+                                      style={{
+                                        marginLeft:
+                                          "8px",
+                                      }}
+                                    >
+                                      {e.rejected ||
+                                        0}
+                                    </span>
+                                  </span>
+
+                                  <span
+                                    style={{
+                                      display: "inline-flex",
+                                      background: "#2993b7",
+                                      color: "#fff",
+                                      padding: "6px 10px",
+                                      fontWeight: "700",
+                                      fontSize: "12px",
+                                    }}
+                                  >
+                                    VALIDNO
+                                    <span
+                                      style={{
+                                        marginLeft:
+                                          "8px",
+                                      }}
+                                    >
+                                      {e.success ||
+                                        0}
+                                    </span>
+                                  </span>
+
+                                </div>
+
                               </div>
+
                             </td>
+
                           </tr>
+
                         )}
+
                       </React.Fragment>
+
                     ))
+
                   )}
+
                 </tbody>
+
               </table>
+
             </div>
 
+            {/* ================================= */}
             {/* PAGINATION */}
+            {/* ================================= */}
+
             <div className="flex justify-between mt-4 text-sm">
+
               <span>
-                Showing {entries.length === 0 ? 0 : (page - 1) * perPage + 1}–{Math.min(page * perPage, entries.length)} of {entries.length} entries
+
+                Showing{" "}
+
+                {entries.length === 0
+                  ? 0
+                  : (page - 1) *
+                  perPage +
+                  1}
+
+                –
+
+                {Math.min(
+                  page * perPage,
+                  entries.length
+                )}
+
+                {" "}of{" "}
+
+                {entries.length}
+
+                {" "}entries
+
               </span>
+
               <div className="flex gap-2">
-                <button onClick={() => setPage((p) => Math.max(p - 1, 1))} disabled={page === 1}
-                  className="wr-page-btn border px-3 py-1 disabled:opacity-40">Previous</button>
-                <button onClick={() => setPage((p) => Math.min(p + 1, totalPages))} disabled={page === totalPages || totalPages === 0}
-                  className="wr-page-btn border px-3 py-1 disabled:opacity-40">Next</button>
+
+                <button
+                  onClick={() =>
+                    setPage((p) =>
+                      Math.max(p - 1, 1)
+                    )
+                  }
+                  disabled={page === 1}
+                  className="border px-3 py-1 hover:bg-gray-200 disabled:opacity-40"
+                >
+                  Previous
+                </button>
+
+                <button
+                  onClick={() =>
+                    setPage((p) =>
+                      Math.min(
+                        p + 1,
+                        totalPages
+                      )
+                    )
+                  }
+                  disabled={
+                    page === totalPages ||
+                    totalPages === 0
+                  }
+                  className="border px-3 py-1 hover:bg-gray-200 disabled:opacity-40"
+                >
+                  Next
+                </button>
+
               </div>
+
             </div>
+
           </div>
+
         </div>
+
       </div>
+
+      {/* ================================= */}
+      {/* IMAGE LIGHTBOX */}
+      {/* ================================= */}
+
+      {lightboxUrl && (
+
+        <div
+          onClick={() =>
+            setLightboxUrl(null)
+          }
+          style={{
+            position: "fixed",
+            inset: 0,
+            background:
+              "rgba(0,0,0,0.85)",
+            zIndex: 9999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "20px",
+            cursor: "pointer",
+          }}
+        >
+
+          <img
+            src={lightboxUrl}
+            alt="Preview"
+            style={{
+              maxWidth: "95%",
+              maxHeight: "95%",
+              objectFit: "contain",
+              borderRadius: "8px",
+            }}
+          />
+
+        </div>
+
+      )}
+
     </div>
   );
 };
