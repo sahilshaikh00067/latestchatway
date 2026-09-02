@@ -452,48 +452,110 @@ def campaign_results_csv(request):
 @api_view(['GET'])
 def my_campaigns(request):
     auto_complete_pending_campaigns()
-    process_scheduled_campaigns()   # 🆕 fire any due scheduled campaigns while we're here
+    process_scheduled_campaigns()
 
     try:
         user_id = request.query_params.get("user_id")
+
+        if not user_id:
+            return Response({
+                "status": "failed",
+                "message": "user_id is required"
+            })
+
         user = User.objects.get(id=user_id)
 
         if user.is_admin():
-            campaigns = Campaign.objects.select_related("user").order_by("-created_at")[:150]
+            campaigns = (
+                Campaign.objects
+                .select_related("user")
+                .order_by("-created_at")[:150]
+            )
         else:
-            campaigns = Campaign.objects.filter(user=user).order_by("-created_at")[:100]
+            campaigns = (
+                Campaign.objects
+                .filter(user=user)
+                .order_by("-created_at")[:100]
+            )
 
-        data = [{
-            "id":            c.id,
-            "name":          c.campaign_name,
-            "message":       c.message,
-            "dp_url":        c.dp_url,
-            "link_label":    c.link_label,
-            "link_url":      c.link_url,
-            "call_label":    c.call_label,
-            "call_number":   c.call_number,
-            "total":         c.total,
-            "success":       c.success,
-            "failed":        c.failed,
-            "nonwa":         c.nonwa,
-            "rejected":      c.rejected,
-            "status":        c.status,
-            "file_urls":     c.file_urls,
-            "date":          c.created_at.strftime("%d-%m-%Y %H:%M"),
-            "rawDate":       int(c.created_at.timestamp() * 1000),
-            "numberResults": c.results,
-            "numberList":    c.number_list,
-            "scheduledAt":   c.scheduled_at.strftime("%d-%m-%Y %H:%M") if getattr(c, "scheduled_at", None) else None,
-        } for c in campaigns]
+        data = []
 
-        return Response({"status": "success", "campaigns": data})
+        for c in campaigns:
+
+            data.append({
+                "id": c.id,
+
+                # CAMPAIGN BASIC DATA
+                "name": c.campaign_name or "",
+                "campaign_name": c.campaign_name or "",
+                "message": c.message or "",
+
+                # DP
+                "dp_url": c.dp_url or "",
+
+                # LINK BUTTON
+                "link_label": c.link_label or "",
+                "link_url": c.link_url or "",
+
+                # CALL BUTTON
+                "call_label": c.call_label or "",
+                "call_number": c.call_number or "",
+
+                # STATS
+                "total": c.total or 0,
+                "success": c.success or 0,
+                "failed": c.failed or 0,
+                "nonwa": c.nonwa or 0,
+                "rejected": c.rejected or 0,
+
+                # STATUS
+                "status": c.status or "",
+
+                # FILES
+                "file_urls": c.file_urls or [],
+
+                # RESULTS
+                "numberResults": c.results or [],
+                "numberList": c.number_list or [],
+
+                # DATE
+                "date": (
+                    c.created_at.strftime("%d-%m-%Y %H:%M")
+                    if c.created_at
+                    else ""
+                ),
+
+                "rawDate": (
+                    int(c.created_at.timestamp() * 1000)
+                    if c.created_at
+                    else 0
+                ),
+
+                "scheduledAt": (
+                    c.scheduled_at.strftime("%d-%m-%Y %H:%M")
+                    if c.scheduled_at
+                    else None
+                ),
+            })
+
+        return Response({
+            "status": "success",
+            "campaigns": data
+        })
 
     except User.DoesNotExist:
-        return Response({"status": "failed", "message": "User not found"})
+        return Response({
+            "status": "failed",
+            "message": "User not found"
+        })
+
     except Exception as e:
         logger.exception("my_campaigns error")
-        return Response({"status": "error", "message": str(e)})
 
+        return Response({
+            "status": "error",
+            "message": str(e)
+        })
 
 # ─────────────────────────────────────────
 # CAMPAIGN COMPLETION — shared by the auto-completer and the manual
@@ -1387,11 +1449,14 @@ def _run_one_scheduled_campaign(campaign_id):
             campaign.message,
             file_list,
             existing_campaign=campaign,
-            link_label=campaign.link_label,
-            link_url=campaign.link_url,
-            call_label=campaign.call_label,
-            call_number=campaign.call_number,
-        )
+            dp_url=campaign.dp_url or "",
+        
+            link_label=campaign.link_label or "",
+            link_url=campaign.link_url or "",
+        
+            call_label=campaign.call_label or "",
+            call_number=campaign.call_number or "",
+            )
 
     except Exception as e:
         logger.exception(

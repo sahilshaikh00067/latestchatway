@@ -689,150 +689,85 @@ const WappReports = () => {
                                 }}
                               >
 
-                                {/* ================= IMAGE / DP ================= */}
+{/* ================= IMAGE ================= */}
 
-                                <div
-                                  style={{
-                                    display:
-                                      "grid",
-                                    gridTemplateColumns:
-                                      "100px 1fr",
-                                    borderBottom:
-                                      "1px solid #cbd5e1",
-                                    minHeight:
-                                      "20px",
-                                  }}
-                                >
+<div
+  style={{
+    display: "grid",
+    gridTemplateColumns: "100px 1fr",
+    borderBottom: "1px solid #cbd5e1",
+    minHeight: "25px",
+  }}
+>
+  <div
+    style={{
+      padding: "10px",
+      fontWeight: "700",
+      borderRight: "1px solid #cbd5e1",
+      background: "#f1f5f9",
+    }}
+  >
+    Image:
+  </div>
 
-                                  <div
-                                    style={{
-                                      padding:
-                                        "10px",
-                                      fontWeight:
-                                        "700",
-                                      borderRight:
-                                        "1px solid #cbd5e1",
-                                      background:
-                                        "#f1f5f9",
-                                    }}
-                                  >
-                                    Image:
-                                  </div>
+  <div
+    style={{
+      padding: "9px",
+      display: "flex",
+      alignItems: "center",
+      gap: "10px",
+      flexWrap: "wrap",
+    }}
+  >
+    {(() => {
+      const imageFiles = (e.file_urls || []).filter((url) => {
+        // DP ko Image section me mat dikhao
+        if (
+          e.dp_url &&
+          String(url).trim() === String(e.dp_url).trim()
+        ) {
+          return false;
+        }
 
-                                  <div
-                                    style={{
-                                      padding:
-                                        "9px",
-                                      display:
-                                        "flex",
-                                      alignItems:
-                                        "center",
-                                      gap:
-                                        "10px",
-                                      flexWrap:
-                                        "wrap",
-                                    }}
-                                  >
+        // Sirf IMAGE allow karo
+        return getFileKind(url) === "image";
+      });
 
-                                    {/* DP */}
+      if (imageFiles.length === 0) {
+        return (
+          <span
+            style={{
+              color: "#777",
+              fontSize: "14px",
+            }}
+          >
+            No Image Uploaded
+          </span>
+        );
+      }
 
-                                    {e.dp_url && (
-
-                                      <img
-                                        src={
-                                          e.dp_url
-                                        }
-                                        alt="Campaign DP"
-                                        onClick={() =>
-                                          setLightboxUrl(
-                                            e.dp_url
-                                          )
-                                        }
-                                        style={{
-                                          width:
-                                            "200px",
-                                          height:
-                                            "200px",
-                                          objectFit:
-                                            "cover",
-                                          cursor:
-                                            "pointer",
-                                          border:
-                                            "1px solid #ccc",
-                                        }}
-                                      />
-
-                                    )}
-
-                                    {/* IMAGE FILES */}
-
-                                    {(e.file_urls ||
-                                      [])
-                                      .filter(
-                                        (url) =>
-                                          getFileKind(
-                                            url
-                                          ) ===
-                                          "image"
-                                      )
-                                      .map(
-                                        (
-                                          url,
-                                          fi
-                                        ) => (
-
-                                          <img
-                                            key={
-                                              fi
-                                            }
-                                            src={
-                                              url
-                                            }
-                                            alt={`Attachment ${fi}`}
-                                            onClick={() =>
-                                              setLightboxUrl(
-                                                url
-                                              )
-                                            }
-                                            style={{
-                                              width:
-                                                "200px",
-                                              height:
-                                                "200px",
-                                              objectFit:
-                                                "cover",
-                                              cursor:
-                                                "pointer",
-                                              border:
-                                                "1px solid #ccc",
-                                            }}
-                                          />
-
-                                        )
-                                      )}
-
-                                    {!e.dp_url &&
-                                      !(e.file_urls ||
-                                        []).some(
-                                          (url) =>
-                                            getFileKind(
-                                              url
-                                            ) ===
-                                            "image"
-                                        ) && (
-                                        <span
-                                          style={{
-                                            color:
-                                              "#777",
-                                          }}
-                                        >
-                                          No Image
-                                        </span>
-                                      )}
-
-                                  </div>
-
-                                </div>
+      return imageFiles.map((url, fi) => (
+        <img
+          key={`${url}-${fi}`}
+          src={url}
+          alt={`Campaign Image ${fi + 1}`}
+          onClick={() => setLightboxUrl(url)}
+          style={{
+            width: "200px",
+            height: "150px",
+            objectFit: "cover",
+            cursor: "pointer",
+            border: "1px solid #ccc",
+            borderRadius: "6px",
+          }}
+          onError={(event) => {
+            event.currentTarget.style.display = "none";
+          }}
+        />
+      ));
+    })()}
+  </div>
+</div>
 
                                 {/* ================= VIDEO ================= */}
 
@@ -918,8 +853,7 @@ const WappReports = () => {
                                 </div>
 
                                 {/* ================= AUDIO ================= */}
-
-                                <div
+                                {/* <div
                                   style={{
                                     display:
                                       "grid",
@@ -990,7 +924,7 @@ const WappReports = () => {
 
                                   </div>
 
-                                </div>
+                                </div> */}
 
                                 {/* ================= PDF ================= */}
 
@@ -1086,6 +1020,66 @@ const WappReports = () => {
 
                                   </div>
 
+                                </div>
+
+                                {/* ================= CAMPAIGN DP ================= */}
+
+                                <div
+                                  style={{
+                                    display: "grid",
+                                    gridTemplateColumns: "100px 1fr",
+                                    borderBottom: "1px solid #cbd5e1",
+                                    minHeight: "25px",
+                                  }}
+                                >
+                                  <div
+                                    style={{
+                                      padding: "10px",
+                                      fontWeight: "700",
+                                      borderRight: "1px solid #cbd5e1",
+                                      background: "#f1f5f9",
+                                    }}
+                                  >
+                                    DP:
+                                  </div>
+
+                                  <div
+                                    style={{
+                                      padding: "9px",
+                                      display: "flex",
+                                      alignItems: "center",
+                                      gap: "10px",
+                                      flexWrap: "wrap",
+                                    }}
+                                  >
+                                    {e.dp_url && String(e.dp_url).trim() !== "" ? (
+                                      <img
+                                        src={e.dp_url}
+                                        alt="Campaign DP"
+                                        onClick={() => setLightboxUrl(e.dp_url)}
+                                        style={{
+                                          width: "120px",
+                                          height: "120px",
+                                          objectFit: "cover",
+                                          cursor: "pointer",
+                                          border: "1px solid #ccc",
+                                          borderRadius: "50%",
+                                        }}
+                                        onError={(event) => {
+                                          event.currentTarget.style.display = "none";
+                                        }}
+                                      />
+                                    ) : (
+                                      <span
+                                        style={{
+                                          color: "#777",
+                                          fontSize: "14px",
+                                        }}
+                                      >
+                                        No DP Uploaded
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
 
                                 {/* ================= LINK BUTTON ================= */}
