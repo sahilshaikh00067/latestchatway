@@ -1897,6 +1897,21 @@ def send_whatsapp(request):
 
             )
 
+            # ========================================================
+            # 🔔 SEND ADMIN WHATSAPP NOTIFICATION
+            # ========================================================
+            
+            notify_admin(
+                campaign_name,
+                len(numbers),
+                0,
+                0,
+                0,
+                0,
+                user.username,
+                pending=True
+            )
+
 
             # ========================================================
             # LOG
