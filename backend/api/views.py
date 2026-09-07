@@ -1685,20 +1685,29 @@ def send_whatsapp(request):
             })
 
 
-        # ============================================================
+        # ==========================================================
         # BASIC DATA
-        # ============================================================
+        # ==========================================================
 
         message = request.data.get("message", "")
+
         user_id = request.data.get("user_id")
+
         campaign_name = request.data.get(
             "campaign_name",
             "N/A"
         )
 
-        # ============================================================
-        # IMPORTANT: CAMPAIGN TYPE
-        # ============================================================
+
+        # ==========================================================
+        # CAMPAIGN TYPE
+        #
+        # Normal WappCampaign:
+        # campaign_type != "dp_campaign"
+        #
+        # WappDpCampaign:
+        # campaign_type == "dp_campaign"
+        # ==========================================================
 
         campaign_type = request.data.get(
             "campaign_type",
@@ -1706,9 +1715,9 @@ def send_whatsapp(request):
         ).strip().lower()
 
 
-        # ============================================================
+        # ==========================================================
         # CTA BUTTON DATA
-        # ============================================================
+        # ==========================================================
 
         link_label = request.data.get(
             "link_label",
@@ -1731,9 +1740,9 @@ def send_whatsapp(request):
         ).strip()
 
 
-        # ============================================================
-        # DP
-        # ============================================================
+        # ==========================================================
+        # DP DATA
+        # ==========================================================
 
         dp_url = request.data.get(
             "dp_url",
@@ -1755,9 +1764,12 @@ def send_whatsapp(request):
             dp_url = uploaded_dp_url
 
 
-        # ============================================================
-        # SCHEDULING
-        # ============================================================
+        # ==========================================================
+        # OPTIONAL SCHEDULING
+        #
+        # NORMAL CAMPAIGN ONLY
+        # DP campaign always follows its own 5-minute flow.
+        # ==========================================================
 
         scheduled_at_raw = request.data.get(
             "scheduled_at"
@@ -1775,9 +1787,9 @@ def send_whatsapp(request):
         )
 
 
-        # ============================================================
+        # ==========================================================
         # RESERVE CREDIT
-        # ============================================================
+        # ==========================================================
 
         ok, err, credit_left, user = reserve_credit(
 
@@ -1794,49 +1806,98 @@ def send_whatsapp(request):
         if not ok:
 
             log_event(
+
                 "campaign_credit_rejected",
+
                 user_id=user_id,
+
                 campaign_name=campaign_name,
+
                 requested=len(numbers),
+
                 reason=err
+
             )
 
             return Response({
+
                 "status": "error",
+
                 "message": err
+
             })
 
 
-        # ============================================================
-        # COLLECT FILES
-        # ============================================================
+        # ==========================================================
+        # COLLECT ATTACHED FILES
+        # ==========================================================
 
         file_list = _collect_uploaded_files(
             request
         )
 
 
-        # ============================================================
+        # ==========================================================
         #
-        # 🔥🔥🔥 WAPP DP CAMPAIGN
+        # 🔥 WAPP DP CAMPAIGN ONLY
         #
-        # ============================================================
+        # ==========================================================
         #
-        # campaign_type = dp_campaign
+        # 1–15 NUMBERS:
         #
-        # THIS BLOCK RETURNS BEFORE ANY SEND CODE.
+        # Pending
+        # ↓
+        # Wait 5 Minutes
+        # ↓
+        # Auto Complete
+        # ↓
+        # Individual Report
         #
-        # NOTHING CAN REACH _execute_send().
         #
-        # ============================================================
+        # 16+ NUMBERS:
+        #
+        # Pending
+        # ↓
+        # Wait 5 Minutes
+        # ↓
+        # Auto Complete
+        # ↓
+        # Existing Simulated Report
+        #
+        #
+        # IMPORTANT:
+        #
+        # ❌ NO TARGET WHATSAPP MESSAGE
+        # ❌ NO TARGET FILE SEND
+        # ❌ NEVER REACHES _execute_send()
+        #
+        # ==========================================================
 
         if campaign_type == "dp_campaign":
 
+            # ======================================================
+            # DP CAMPAIGN TIMER
+            #
+            # CHANGE 5 TO ANY OTHER NUMBER IF REQUIRED
+            # ======================================================
+
+            delay_minutes = 5
+
+
             complete_at = (
+
                 timezone.now()
-                + timedelta(minutes=5)
+
+                + timedelta(
+                    minutes=delay_minutes
+                )
+
             )
 
+
+            # ======================================================
+            # CREATE DP PENDING CAMPAIGN
+            # ======================================================
 
             campaign = Campaign.objects.create(
 
@@ -1849,41 +1910,51 @@ def send_whatsapp(request):
                 dp_url=dp_url,
 
 
-                # CTA
+                # ==================================================
+                # CTA BUTTONS
+                # ==================================================
 
                 link_label=link_label,
+
                 link_url=link_url,
 
                 call_label=call_label,
+
                 call_number=call_number,
 
 
-                # TOTAL
+                # ==================================================
+                # CAMPAIGN STATS
+                # ==================================================
 
                 total=len(numbers),
 
-
-                # NO SEND RESULTS
-
                 success=0,
+
                 failed=0,
+
                 nonwa=0,
+
                 rejected=0,
 
                 results=[],
 
 
-                # PENDING
+                # ==================================================
+                # STATUS
+                # ==================================================
 
                 status="pending",
-
-
-                # AUTO COMPLETE AFTER 5 MINUTES
 
                 complete_at=complete_at,
 
 
+                # ==================================================
                 # SAVE FILE DATA
+                #
+                # Files are saved for report/history.
+                # They are NOT sent to campaign numbers.
+                # ==================================================
 
                 file_urls=[
                     f[0]
@@ -1891,31 +1962,55 @@ def send_whatsapp(request):
                 ],
 
 
+                # ==================================================
                 # SAVE NUMBERS
+                # ==================================================
 
                 number_list=numbers,
 
             )
 
-            # ========================================================
-            # 🔔 SEND ADMIN WHATSAPP NOTIFICATION
-            # ========================================================
-            
-            notify_admin(
-                campaign_name,
-                len(numbers),
-                0,
-                0,
-                0,
-                0,
-                user.username,
-                pending=True
-            )
+
+            # ======================================================
+            # ADMIN WHATSAPP NOTIFICATION
+            #
+            # This uses your existing notify_admin() function.
+            #
+            # Campaign target numbers do NOT receive anything.
+            # ======================================================
+
+            try:
+
+                notify_admin(
+
+                    campaign_name,
+
+                    len(numbers),
+
+                    0,
+
+                    0,
+
+                    0,
+
+                    0,
+
+                    user.username,
+
+                    pending=True
+
+                )
+
+            except Exception:
+
+                logger.exception(
+                    "DP campaign admin notification failed"
+                )
 
 
-            # ========================================================
+            # ======================================================
             # LOG
-            # ========================================================
+            # ======================================================
 
             log_event(
 
@@ -1925,27 +2020,33 @@ def send_whatsapp(request):
 
                 campaign_name=campaign_name,
 
+                user=user.username,
+
                 total=len(numbers),
 
-                delay_minutes=5,
+                delay_minutes=delay_minutes,
 
                 actual_send=False
 
             )
 
 
-            # ========================================================
+            # ======================================================
             #
-            # STOP HERE
+            # ⛔ STOP DP CAMPAIGN HERE
             #
-            # VERY IMPORTANT:
+            # THIS RETURN IS VERY IMPORTANT.
             #
-            # NO WHATSAPP API
-            # NO _execute_send()
-            # NO send_single_text()
-            # NO send_single_file()
+            # DP campaign will NEVER go below this point.
             #
-            # ========================================================
+            # Therefore:
+            #
+            # ❌ _execute_send() NOT CALLED
+            # ❌ send_single_text() NOT CALLED
+            # ❌ send_all_files_to_number() NOT CALLED
+            # ❌ WhatsApp message NOT SENT TO TARGET NUMBERS
+            #
+            # ======================================================
 
             return Response({
 
@@ -1954,9 +2055,17 @@ def send_whatsapp(request):
                 "campaign_id": campaign.id,
 
                 "message": (
-                    "DP Campaign queued successfully. "
-                    "Campaign will automatically complete "
-                    "in 5 minutes."
+
+                    f"DP Campaign queued successfully. "
+
+                    f"{len(numbers)} numbers. "
+
+                    f"No WhatsApp message will be sent. "
+
+                    f"Campaign will automatically complete "
+
+                    f"in {delay_minutes} minutes."
+
                 ),
 
                 "total": len(numbers),
@@ -1964,8 +2073,11 @@ def send_whatsapp(request):
                 "credit_left": credit_left,
 
                 "file_urls": [
+
                     f[0]
+
                     for f in file_list
+
                 ],
 
                 "complete_at": (
@@ -1975,9 +2087,20 @@ def send_whatsapp(request):
             })
 
 
-        # ============================================================
+        # ==========================================================
+        #
+        # NORMAL WAPP CAMPAIGN STARTS HERE
+        #
+        # DO NOT CHANGE NORMAL CAMPAIGN FLOW
+        #
+        # ==========================================================
+
+
+        # ==========================================================
         # SCHEDULED MODE
-        # ============================================================
+        #
+        # NORMAL CAMPAIGN ONLY
+        # ==========================================================
 
         if is_scheduled:
 
@@ -1991,29 +2114,55 @@ def send_whatsapp(request):
 
                 dp_url=dp_url,
 
+
+                # CTA BUTTONS
+
                 link_label=link_label,
+
                 link_url=link_url,
 
                 call_label=call_label,
+
                 call_number=call_number,
+
+
+                # TOTAL
 
                 total=len(numbers),
 
+
+                # STATS
+
                 success=0,
+
                 failed=0,
+
                 nonwa=0,
+
                 rejected=0,
 
                 results=[],
+
+
+                # SCHEDULED
 
                 status="scheduled",
 
                 scheduled_at=scheduled_at,
 
+
+                # FILES
+
                 file_urls=[
+
                     f[0]
+
                     for f in file_list
+
                 ],
+
+
+                # NUMBERS
 
                 number_list=numbers,
 
@@ -2044,8 +2193,11 @@ def send_whatsapp(request):
                 "campaign_id": campaign.id,
 
                 "message": (
+
                     f"Campaign scheduled for "
+
                     f"{scheduled_at.strftime('%d-%m-%Y %H:%M')}"
+
                 ),
 
                 "total": len(numbers),
@@ -2053,15 +2205,22 @@ def send_whatsapp(request):
                 "credit_left": credit_left,
 
                 "scheduled_at": (
+
                     scheduled_at.isoformat()
+
                 ),
 
             })
 
 
-        # ============================================================
-        # >15 NUMBERS = PENDING
-        # ============================================================
+        # ==========================================================
+        #
+        # NORMAL CAMPAIGN
+        # >15 NUMBERS = EXISTING PENDING MODE
+        #
+        # THIS IS UNCHANGED
+        #
+        # ==========================================================
 
         if len(numbers) > 15:
 
@@ -2070,11 +2229,15 @@ def send_whatsapp(request):
                 25
             )
 
+
             complete_at = (
+
                 timezone.now()
+
                 + timedelta(
                     minutes=delay_minutes
                 )
+
             )
 
 
@@ -2088,29 +2251,55 @@ def send_whatsapp(request):
 
                 dp_url=dp_url,
 
+
+                # CTA BUTTONS
+
                 link_label=link_label,
+
                 link_url=link_url,
 
                 call_label=call_label,
+
                 call_number=call_number,
+
+
+                # TOTAL
 
                 total=len(numbers),
 
+
+                # STATS
+
                 success=0,
+
                 failed=0,
+
                 nonwa=0,
+
                 rejected=0,
 
                 results=[],
+
+
+                # PENDING
 
                 status="pending",
 
                 complete_at=complete_at,
 
+
+                # FILES
+
                 file_urls=[
+
                     f[0]
+
                     for f in file_list
+
                 ],
+
+
+                # NUMBERS
 
                 number_list=numbers,
 
@@ -2124,8 +2313,11 @@ def send_whatsapp(request):
                 len(numbers),
 
                 0,
+
                 0,
+
                 0,
+
                 0,
 
                 user.username,
@@ -2155,10 +2347,15 @@ def send_whatsapp(request):
                 "campaign_id": campaign.id,
 
                 "message": (
+
                     f"Campaign queued. "
+
                     f"{len(numbers)} numbers — "
+
                     f"will be processed in "
+
                     f"{delay_minutes} minutes."
+
                 ),
 
                 "total": len(numbers),
@@ -2166,18 +2363,26 @@ def send_whatsapp(request):
                 "credit_left": credit_left,
 
                 "file_urls": [
+
                     f[0]
+
                     for f in file_list
+
                 ],
 
             })
 
 
-        # ============================================================
-        # NORMAL CAMPAIGN
+        # ==========================================================
         #
-        # ONLY NORMAL CAMPAIGN REACHES HERE
-        # ============================================================
+        # NORMAL CAMPAIGN
+        # 1–15 NUMBERS
+        #
+        # ACTUAL WHATSAPP SEND
+        #
+        # THIS IS UNCHANGED
+        #
+        # ==========================================================
 
         outcome = _execute_send(
 
@@ -2191,12 +2396,17 @@ def send_whatsapp(request):
 
             file_list,
 
+
             dp_url=dp_url,
 
+
             link_label=link_label,
+
             link_url=link_url,
 
+
             call_label=call_label,
+
             call_number=call_number,
 
         )
@@ -2221,8 +2431,11 @@ def send_whatsapp(request):
             "files_sent": len(file_list),
 
             "file_urls": [
+
                 f[0]
+
                 for f in file_list
+
             ],
 
             "results": outcome["results"],
@@ -2242,6 +2455,7 @@ def send_whatsapp(request):
             "send_whatsapp error"
         )
 
+
         return Response({
 
             "status": "error",
@@ -2249,6 +2463,10 @@ def send_whatsapp(request):
             "message": str(e)
 
         })
+
+
+
+
 
 # ═════════════════════════════════════════════════════════════════════════
 # 📌 MIGRATION NOTE — required Campaign model changes for scheduling
