@@ -1163,30 +1163,131 @@ def send_single_file(args):
 
 def send_all_files_to_number(args):
     number, message, file_list, token_index, job_id = args
+
     results = []
-    if message:
-        results.append(send_single_text((number, message, token_index, None)))
-    for i, (file_url, file_name) in enumerate(file_list):
-        results.append(send_single_file((number, "", file_url, file_name, (token_index + i) % TOKEN_COUNT)))
 
-    statuses = [r["status"] for r in results]
+    # ==========================================
+    # MEDIA AVAILABLE
+    # Image/File + Message ek hi request me
+    # ==========================================
+    if file_list:
 
-    # 🆕 FIX: pehle "success" in statuses tha — matlab agar text chala gaya
-    # but image fail ho gayi, phir bhi poora number "success" maan liya
-    # jaata tha (image silently missing rehti thi, retry bhi trigger nahi
-    # hota tha). Ab TEXT + HAR FILE, sabka success chahiye tabhi "success".
-    if statuses and all(s == "success" for s in statuses):
-        final = "success"
-    elif "nonwa" in statuses:
-        final = "nonwa"
-    elif "rejected" in statuses:
-        final = "rejected"
+        for i, (file_url, file_name) in enumerate(file_list):
+
+            # Sirf first media ke saath full message caption
+            caption = (message or "") if i == 0 else ""
+
+            result = send_single_file(
+                (
+                    number,
+                    caption,
+                    file_url,
+                    file_name,
+                    (token_index + i) % TOKEN_COUNT,
+                )
+            )
+
+            results.append(result)
+
+    # ==========================================
+    # NO MEDIA
+    # Sirf text message
+    # ==========================================
     else:
+
+        if message:
+            result = send_single_text(
+                (
+                    number,
+                    message,
+                    token_index,
+                    None,
+                )
+            )
+
+            results.append(result)
+
+    # ==========================================
+    # FINAL STATUS
+    # ==========================================
+    if not results:
         final = "failed"
 
-    _bump_progress(job_id, final)
-    return {"status": final}
+    else:
+        statuses = [
+            result.get("status", "failed")
+            for result in results
+        ]
 
+        if all(status == "success" for status in statuses):
+            final = "success"
+
+        elif "nonwa" in statuses:
+            final = "nonwa"
+
+        elif "rejected" in statuses:
+            final = "rejected"
+
+        else:
+            final = "failed"
+
+    _bump_progress(job_id, final)
+
+    return {
+        "status": final
+    }
+
+
+def send_single_file(args):
+    number, message, file_url, file_name, token_index = args
+
+    number = _normalize_number(number)
+
+    if not number:
+        return {"status": "failed"}
+
+    for idx in _token_order(token_index):
+
+        try:
+
+            url = "https://int.chatway.in/api/send-file"
+
+            params = {
+                "username": USERNAME,
+                "number": number,
+                "message": message or "",
+                "token": TOKENS[idx],
+                "file_url": file_url,
+                "file_name": file_name,
+            }
+
+            res = _session.get(
+                url,
+                params=params,
+                timeout=FILE_TIMEOUT
+            )
+
+            txt = res.text.lower()
+
+            if "not exist" in txt:
+                _mark_token_result(idx, True)
+                return {"status": "nonwa"}
+
+            if "reject" in txt:
+                _mark_token_result(idx, True)
+                return {"status": "rejected"}
+
+            if "success" in txt or "accepted" in txt:
+                _mark_token_result(idx, True)
+                return {"status": "success"}
+
+            _mark_token_result(idx, False)
+
+        except Exception:
+            _mark_token_result(idx, False)
+            continue
+
+    return {"status": "failed"}
 
 # ═════════════════════════════════════════════════════════════════════════
 # 🆕 MULTI-ROUND RETRY WITH EXPONENTIAL BACKOFF
@@ -1456,7 +1557,7 @@ def _run_one_scheduled_campaign(campaign_id):
         
             call_label=campaign.call_label or "",
             call_number=campaign.call_number or "",
-            )
+                )
 
     except Exception as e:
         logger.exception(
@@ -1553,173 +1654,586 @@ def campaign_analytics(request):
 # ─────────────────────────────────────────
 @api_view(['POST'])
 def send_whatsapp(request):
+
     try:
+
+        # ============================================================
+        # NUMBERS
+        # ============================================================
+
         numbers = (
             request.data.getlist("numbers")
             if hasattr(request.data, "getlist")
             else request.data.get("numbers", [])
         )
+
         if isinstance(numbers, str):
             numbers = [numbers]
-        numbers = list(set(n.strip() for n in numbers if n and n.strip()))
+
+        numbers = list(
+            set(
+                n.strip()
+                for n in numbers
+                if n and n.strip()
+            )
+        )
 
         if not numbers:
-            return Response({"status": "error", "message": "No valid numbers provided"})
+            return Response({
+                "status": "error",
+                "message": "No valid numbers provided"
+            })
 
-        message       = request.data.get("message", "")
-        user_id       = request.data.get("user_id")
-        campaign_name = request.data.get("campaign_name", "N/A")
 
+        # ============================================================
+        # BASIC DATA
+        # ============================================================
+
+        message = request.data.get("message", "")
+        user_id = request.data.get("user_id")
+        campaign_name = request.data.get(
+            "campaign_name",
+            "N/A"
+        )
+
+        # ============================================================
+        # IMPORTANT: CAMPAIGN TYPE
+        # ============================================================
+
+        campaign_type = request.data.get(
+            "campaign_type",
+            ""
+        ).strip().lower()
+
+
+        # ============================================================
         # CTA BUTTON DATA
-        link_label = request.data.get("link_label", "").strip()
-        link_url = request.data.get("link_url", "").strip()
+        # ============================================================
 
-        call_label = request.data.get("call_label", "").strip()
-        call_number = request.data.get("call_number", "").strip()
+        link_label = request.data.get(
+            "link_label",
+            ""
+        ).strip()
 
-        # Campaign DP (optional)
-        dp_url = request.data.get("dp_url", "").strip()
+        link_url = request.data.get(
+            "link_url",
+            ""
+        ).strip()
+
+        call_label = request.data.get(
+            "call_label",
+            ""
+        ).strip()
+
+        call_number = request.data.get(
+            "call_number",
+            ""
+        ).strip()
+
+
+        # ============================================================
+        # DP
+        # ============================================================
+
+        dp_url = request.data.get(
+            "dp_url",
+            ""
+        ).strip()
+
         dp_file = request.FILES.get("dp")
+
         uploaded_dp_url = ""
 
         if dp_file:
-            uploaded_dp_url, _ = upload_file(dp_file)
+
+            uploaded_dp_url, _ = upload_file(
+                dp_file
+            )
 
         if uploaded_dp_url:
+
             dp_url = uploaded_dp_url
 
-        # 🆕 Optional scheduling: pass `scheduled_at` as an ISO datetime string
-        # (e.g. "2026-07-24T18:30:00+05:30"). If it's in the future, the
-        # campaign is queued instead of sent immediately.
-        scheduled_at_raw = request.data.get("scheduled_at")
-        scheduled_at = parse_datetime(scheduled_at_raw) if scheduled_at_raw else None
-        is_scheduled = bool(scheduled_at and scheduled_at > timezone.now())
 
-        # 🔒 Reserve credit for the FULL number count up-front, atomically.
-        # This deduction is FINAL — no refund happens later, regardless of
-        # success/failed/nonwa/rejected outcome (except cancel-before-send).
-        ok, err, credit_left, user = reserve_credit(
-            user_id, len(numbers),
-            f"Campaign '{campaign_name}' — {len(numbers)} numbers charged"
+        # ============================================================
+        # SCHEDULING
+        # ============================================================
+
+        scheduled_at_raw = request.data.get(
+            "scheduled_at"
         )
+
+        scheduled_at = (
+            parse_datetime(scheduled_at_raw)
+            if scheduled_at_raw
+            else None
+        )
+
+        is_scheduled = bool(
+            scheduled_at
+            and scheduled_at > timezone.now()
+        )
+
+
+        # ============================================================
+        # RESERVE CREDIT
+        # ============================================================
+
+        ok, err, credit_left, user = reserve_credit(
+
+            user_id,
+
+            len(numbers),
+
+            f"Campaign '{campaign_name}' — "
+            f"{len(numbers)} numbers charged"
+
+        )
+
+
         if not ok:
-            log_event("campaign_credit_rejected", user_id=user_id, campaign_name=campaign_name,
-                      requested=len(numbers), reason=err)
-            return Response({"status": "error", "message": err})
 
-        file_list = _collect_uploaded_files(request)
-
-        # ─────────────────────────────────────────
-        # 🆕 SCHEDULED MODE — future scheduled_at wins over everything else
-        # ─────────────────────────────────────────
-        if is_scheduled:
-            campaign = Campaign.objects.create(
-                user=user,
+            log_event(
+                "campaign_credit_rejected",
+                user_id=user_id,
                 campaign_name=campaign_name,
-                message=message,
-                dp_url=dp_url,
-                # CTA BUTTONS
-                link_label=link_label,
-                link_url=link_url,
-                call_label=call_label,
-                call_number=call_number,
-                total=len(numbers),
-                success=0, failed=0, nonwa=0, rejected=0,
-                results=[],
-                status="scheduled",
-                scheduled_at=scheduled_at,
-                file_urls=[f[0] for f in file_list],
-                number_list=numbers,
+                requested=len(numbers),
+                reason=err
             )
-            log_event("campaign_scheduled", campaign_id=campaign.id, campaign_name=campaign_name,
-                      user=user.username, total=len(numbers), scheduled_at=scheduled_at)
 
             return Response({
-                "status":       "scheduled",
-                "campaign_id":  campaign.id,
-                "message":      f"Campaign scheduled for {scheduled_at.strftime('%d-%m-%Y %H:%M')}",
-                "total":        len(numbers),
-                "credit_left":  credit_left,
-                "scheduled_at": scheduled_at.isoformat(),
+                "status": "error",
+                "message": err
             })
 
-        # ─────────────────────────────────────────
-        # >15 NUMBERS = PENDING MODE
-        # ─────────────────────────────────────────
-        if len(numbers) > 15:
-            delay_minutes = random.randint(15, 25)
-            complete_at   = timezone.now() + timedelta(minutes=delay_minutes)
+
+        # ============================================================
+        # COLLECT FILES
+        # ============================================================
+
+        file_list = _collect_uploaded_files(
+            request
+        )
+
+
+        # ============================================================
+        #
+        # 🔥🔥🔥 WAPP DP CAMPAIGN
+        #
+        # ============================================================
+        #
+        # campaign_type = dp_campaign
+        #
+        # THIS BLOCK RETURNS BEFORE ANY SEND CODE.
+        #
+        # NOTHING CAN REACH _execute_send().
+        #
+        # ============================================================
+
+        if campaign_type == "dp_campaign":
+
+            complete_at = (
+                timezone.now()
+                + timedelta(minutes=5)
+            )
+
 
             campaign = Campaign.objects.create(
+
                 user=user,
+
                 campaign_name=campaign_name,
+
                 message=message,
+
                 dp_url=dp_url,
-                # CTA BUTTONS
+
+
+                # CTA
+
                 link_label=link_label,
                 link_url=link_url,
+
                 call_label=call_label,
                 call_number=call_number,
+
+
+                # TOTAL
+
                 total=len(numbers),
+
+
+                # NO SEND RESULTS
+
                 success=0,
                 failed=0,
                 nonwa=0,
                 rejected=0,
+
                 results=[],
+
+
+                # PENDING
+
                 status="pending",
+
+
+                # AUTO COMPLETE AFTER 5 MINUTES
+
                 complete_at=complete_at,
-                file_urls=[f[0] for f in file_list],
+
+
+                # SAVE FILE DATA
+
+                file_urls=[
+                    f[0]
+                    for f in file_list
+                ],
+
+
+                # SAVE NUMBERS
+
                 number_list=numbers,
+
             )
 
-            notify_admin(campaign_name, len(numbers), 0, 0, 0, 0, user.username, pending=True)
-            log_event("campaign_queued_pending", campaign_id=campaign.id, total=len(numbers),
-                      delay_minutes=delay_minutes)
+
+            # ========================================================
+            # LOG
+            # ========================================================
+
+            log_event(
+
+                "dp_campaign_queued",
+
+                campaign_id=campaign.id,
+
+                campaign_name=campaign_name,
+
+                total=len(numbers),
+
+                delay_minutes=5,
+
+                actual_send=False
+
+            )
+
+
+            # ========================================================
+            #
+            # STOP HERE
+            #
+            # VERY IMPORTANT:
+            #
+            # NO WHATSAPP API
+            # NO _execute_send()
+            # NO send_single_text()
+            # NO send_single_file()
+            #
+            # ========================================================
 
             return Response({
-                "status":      "pending",
+
+                "status": "pending",
+
                 "campaign_id": campaign.id,
-                "message":     f"Campaign queued. {len(numbers)} numbers — will be processed in {delay_minutes} minutes.",
-                "total":       len(numbers),
+
+                "message": (
+                    "DP Campaign queued successfully. "
+                    "Campaign will automatically complete "
+                    "in 5 minutes."
+                ),
+
+                "total": len(numbers),
+
                 "credit_left": credit_left,
-                "file_urls":   [f[0] for f in file_list],
+
+                "file_urls": [
+                    f[0]
+                    for f in file_list
+                ],
+
+                "complete_at": (
+                    complete_at.isoformat()
+                ),
+
             })
 
-        # ─────────────────────────────────────────
-        # ≤15 NUMBERS = NORMAL IMMEDIATE SEND
-        # (now routed through the shared _execute_send executor)
-        # ─────────────────────────────────────────
+
+        # ============================================================
+        # SCHEDULED MODE
+        # ============================================================
+
+        if is_scheduled:
+
+            campaign = Campaign.objects.create(
+
+                user=user,
+
+                campaign_name=campaign_name,
+
+                message=message,
+
+                dp_url=dp_url,
+
+                link_label=link_label,
+                link_url=link_url,
+
+                call_label=call_label,
+                call_number=call_number,
+
+                total=len(numbers),
+
+                success=0,
+                failed=0,
+                nonwa=0,
+                rejected=0,
+
+                results=[],
+
+                status="scheduled",
+
+                scheduled_at=scheduled_at,
+
+                file_urls=[
+                    f[0]
+                    for f in file_list
+                ],
+
+                number_list=numbers,
+
+            )
+
+
+            log_event(
+
+                "campaign_scheduled",
+
+                campaign_id=campaign.id,
+
+                campaign_name=campaign_name,
+
+                user=user.username,
+
+                total=len(numbers),
+
+                scheduled_at=scheduled_at
+
+            )
+
+
+            return Response({
+
+                "status": "scheduled",
+
+                "campaign_id": campaign.id,
+
+                "message": (
+                    f"Campaign scheduled for "
+                    f"{scheduled_at.strftime('%d-%m-%Y %H:%M')}"
+                ),
+
+                "total": len(numbers),
+
+                "credit_left": credit_left,
+
+                "scheduled_at": (
+                    scheduled_at.isoformat()
+                ),
+
+            })
+
+
+        # ============================================================
+        # >15 NUMBERS = PENDING
+        # ============================================================
+
+        if len(numbers) > 15:
+
+            delay_minutes = random.randint(
+                15,
+                25
+            )
+
+            complete_at = (
+                timezone.now()
+                + timedelta(
+                    minutes=delay_minutes
+                )
+            )
+
+
+            campaign = Campaign.objects.create(
+
+                user=user,
+
+                campaign_name=campaign_name,
+
+                message=message,
+
+                dp_url=dp_url,
+
+                link_label=link_label,
+                link_url=link_url,
+
+                call_label=call_label,
+                call_number=call_number,
+
+                total=len(numbers),
+
+                success=0,
+                failed=0,
+                nonwa=0,
+                rejected=0,
+
+                results=[],
+
+                status="pending",
+
+                complete_at=complete_at,
+
+                file_urls=[
+                    f[0]
+                    for f in file_list
+                ],
+
+                number_list=numbers,
+
+            )
+
+
+            notify_admin(
+
+                campaign_name,
+
+                len(numbers),
+
+                0,
+                0,
+                0,
+                0,
+
+                user.username,
+
+                pending=True
+
+            )
+
+
+            log_event(
+
+                "campaign_queued_pending",
+
+                campaign_id=campaign.id,
+
+                total=len(numbers),
+
+                delay_minutes=delay_minutes
+
+            )
+
+
+            return Response({
+
+                "status": "pending",
+
+                "campaign_id": campaign.id,
+
+                "message": (
+                    f"Campaign queued. "
+                    f"{len(numbers)} numbers — "
+                    f"will be processed in "
+                    f"{delay_minutes} minutes."
+                ),
+
+                "total": len(numbers),
+
+                "credit_left": credit_left,
+
+                "file_urls": [
+                    f[0]
+                    for f in file_list
+                ],
+
+            })
+
+
+        # ============================================================
+        # NORMAL CAMPAIGN
+        #
+        # ONLY NORMAL CAMPAIGN REACHES HERE
+        # ============================================================
+
         outcome = _execute_send(
-    user,
-    campaign_name,
-    numbers,
-    message,
-    file_list,
-    dp_url=dp_url,
-    link_label=link_label,
-    link_url=link_url,
-    call_label=call_label,
-    call_number=call_number,
-)
+
+            user,
+
+            campaign_name,
+
+            numbers,
+
+            message,
+
+            file_list,
+
+            dp_url=dp_url,
+
+            link_label=link_label,
+            link_url=link_url,
+
+            call_label=call_label,
+            call_number=call_number,
+
+        )
+
 
         return Response({
-            "status":      "done",
-            "success":     outcome["success"],
-            "failed":      outcome["failed"],
-            "nonwa":       outcome["nonwa"],
-            "rejected":    outcome["rejected"],
-            "credit_left": outcome["credit_left"],
-            "files_sent":  len(file_list),
-            "file_urls":   [f[0] for f in file_list],
-            "results":     outcome["results"],
+
+            "status": "done",
+
+            "success": outcome["success"],
+
+            "failed": outcome["failed"],
+
+            "nonwa": outcome["nonwa"],
+
+            "rejected": outcome["rejected"],
+
+            "credit_left": (
+                outcome["credit_left"]
+            ),
+
+            "files_sent": len(file_list),
+
+            "file_urls": [
+                f[0]
+                for f in file_list
+            ],
+
+            "results": outcome["results"],
+
             "tokens_used": TOKEN_COUNT,
-            "elapsed_seconds": outcome["elapsed_seconds"],
+
+            "elapsed_seconds": (
+                outcome["elapsed_seconds"]
+            ),
+
         })
 
-    except Exception as e:
-        logger.exception("send_whatsapp error")
-        return Response({"status": "error", "message": str(e)})
 
+    except Exception as e:
+
+        logger.exception(
+            "send_whatsapp error"
+        )
+
+        return Response({
+
+            "status": "error",
+
+            "message": str(e)
+
+        })
 
 # ═════════════════════════════════════════════════════════════════════════
 # 📌 MIGRATION NOTE — required Campaign model changes for scheduling

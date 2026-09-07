@@ -240,6 +240,7 @@ export default function WappDpCampaign() {
       formData.append("message", message);
       formData.append("user_id", userId);
       formData.append("campaign_name", campaignName);
+      formData.append("campaign_type", "dp_campaign");
       // CTA BUTTONS
 if (linkUrl && linkUrl.trim()) {
   formData.append(
