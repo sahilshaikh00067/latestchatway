@@ -1337,46 +1337,188 @@ def _retry_failed_sends(results, numbers, message, file_list, job_id=None):
 # ─────────────────────────────────────────
 # NOTIFY ADMIN
 # ─────────────────────────────────────────
-def notify_admin(campaign_name, total, success, failed, nonwa, rejected, sender_username, pending=False):
+def notify_admin(
+    campaign_name,
+    total,
+    success,
+    failed,
+    nonwa,
+    rejected,
+    sender_username,
+    pending=False,
+    dp_campaign=False,
+    delay_minutes=None
+):
+
     try:
+
         admin_number = "918381845350"
-        if pending:
+
+
+        # =====================================================
+        # 🔵 WAPP DP CAMPAIGN NOTIFICATION
+        # =====================================================
+
+        if dp_campaign:
+
+            if pending:
+
+                delay_text = (
+                    f"{delay_minutes} minutes"
+                    if delay_minutes
+                    else "10 minutes"
+                )
+
+                message = (
+
+                    f"🔵 *WAPP DP CAMPAIGN*\n\n"
+
+                    f"👤 User: {sender_username}\n"
+
+                    f"📋 Campaign: {campaign_name}\n"
+
+                    f"📞 Total Numbers: {total}\n\n"
+
+                    f"⏳ Status: PENDING\n"
+
+                    f"⏱️ Auto Complete: {delay_text}\n\n"
+
+                    f"🚫 No WhatsApp message will be sent "
+                    f"to target numbers."
+
+                )
+
+            else:
+
+                message = (
+
+                    f"🔵 *WAPP DP CAMPAIGN COMPLETED*\n\n"
+
+                    f"👤 User: {sender_username}\n"
+
+                    f"📋 Campaign: {campaign_name}\n"
+
+                    f"📊 Total: {total}\n"
+
+                    f"✅ Success: {success}\n"
+
+                    f"❌ Failed: {failed}\n"
+
+                    f"📵 NonWA: {nonwa}\n"
+
+                    f"🚫 Rejected: {rejected}"
+
+                )
+
+
+        # =====================================================
+        # 🟢 NORMAL CAMPAIGN PENDING
+        #
+        # YOUR OLD TEXT — UNCHANGED
+        # =====================================================
+
+        elif pending:
+
             message = (
-                f"📥 *New Campaign Queued (PENDING)*\n\n"
+
+                f"📥 *New Normal Campaign Queued (PENDING)*\n\n"
+
                 f"👤 User: {sender_username}\n"
+
                 f"📋 Campaign: {campaign_name}\n"
+
                 f"📞 Total Numbers: {total}\n\n"
+
                 f"⏳ Campaign will be processed in 15-25 minutes.\n"
+
                 f"Please process manually and mark complete."
-            )
-        else:
-            message = (
-                f"🚀 *New Campaign Alert!*\n\n"
-                f"👤 User: {sender_username}\n"
-                f"📋 Campaign: {campaign_name}\n"
-                f"📊 Total: {total}\n"
-                f"✅ Success: {success}\n"
-                f"❌ Failed: {failed}\n"
-                f"📵 NonWA: {nonwa}\n"
-                f"🚫 Rejected: {rejected}"
+
             )
 
+
+        # =====================================================
+        # 🟢 NORMAL CAMPAIGN COMPLETED
+        #
+        # YOUR OLD TEXT — UNCHANGED
+        # =====================================================
+
+        else:
+
+            message = (
+
+                f"🚀 *New Campaign Alert!*\n\n"
+
+                f"👤 User: {sender_username}\n"
+
+                f"📋 Campaign: {campaign_name}\n"
+
+                f"📊 Total: {total}\n"
+
+                f"✅ Success: {success}\n"
+
+                f"❌ Failed: {failed}\n"
+
+                f"📵 NonWA: {nonwa}\n"
+
+                f"🚫 Rejected: {rejected}"
+
+            )
+
+
+        # =====================================================
+        # SEND NOTIFICATION
+        # =====================================================
+
         def _notify():
+
             for token in TOKENS:
+
                 try:
+
                     url = (
+
                         f"https://int.chatway.in/api/send-msg"
-                        f"?username={USERNAME}&number={admin_number}"
-                        f"&message={requests.utils.quote(message)}&token={token}"
+
+                        f"?username={USERNAME}"
+
+                        f"&number={admin_number}"
+
+                        f"&message={requests.utils.quote(message)}"
+
+                        f"&token={token}"
+
                     )
-                    res = _session.get(url, timeout=ADMIN_TIMEOUT)
-                    if "success" in res.text.lower() or "accepted" in res.text.lower():
+
+
+                    res = _session.get(
+                        url,
+                        timeout=ADMIN_TIMEOUT
+                    )
+
+
+                    if (
+                        "success" in res.text.lower()
+                        or
+                        "accepted" in res.text.lower()
+                    ):
+
                         break
+
+
                 except Exception:
+
                     continue
+
+
         UPLOAD_EXECUTOR.submit(_notify)
+
+
     except Exception as e:
-        logger.error("notify_admin error: %s", e)
+
+        logger.error(
+            "notify_admin error: %s",
+            e
+        )
 
 
 def _collect_uploaded_files(request):
@@ -1847,7 +1989,7 @@ def send_whatsapp(request):
         #
         # Pending
         # ↓
-        # Wait 5 Minutes
+        # Wait 10 Minutes
         # ↓
         # Auto Complete
         # ↓
@@ -1858,7 +2000,7 @@ def send_whatsapp(request):
         #
         # Pending
         # ↓
-        # Wait 5 Minutes
+        # Wait 10 Minutes
         # ↓
         # Auto Complete
         # ↓
@@ -1881,7 +2023,7 @@ def send_whatsapp(request):
             # CHANGE 5 TO ANY OTHER NUMBER IF REQUIRED
             # ======================================================
 
-            delay_minutes = 5
+            delay_minutes = 10
 
 
             complete_at = (
@@ -1981,26 +2123,18 @@ def send_whatsapp(request):
 
             try:
 
-                notify_admin(
-
-                    campaign_name,
-
-                    len(numbers),
-
-                    0,
-
-                    0,
-
-                    0,
-
-                    0,
-
-                    user.username,
-
-                    pending=True
-
-                )
-
+             notify_admin(
+                 campaign_name,
+                 len(numbers),
+                 0,
+                 0,
+                 0,
+                 0,
+                 user.username,
+                 pending=True,
+                 dp_campaign=True,
+                 delay_minutes=delay_minutes
+             )
             except Exception:
 
                 logger.exception(
