@@ -89,7 +89,6 @@ export default function WappCampaign() {
   const [campaignName, setCampaignName] = useState("");
   const [numbers, setNumbers] = useState("");
   const [message, setMessage] = useState("");
-  const [priorityNumbers, setPriorityNumbers] = useState([]);
 
   const [showConfirm, setShowConfirm] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
@@ -276,8 +275,8 @@ export default function WappCampaign() {
     return (
       <div
         className={`border border-gray-300 rounded overflow-hidden transition-shadow duration-200 ${isDisabled
-          ? "opacity-50 cursor-not-allowed"
-          : "hover:shadow-sm"
+            ? "opacity-50 cursor-not-allowed"
+            : "hover:shadow-sm"
           }`}
       >
         <div
@@ -305,10 +304,10 @@ export default function WappCampaign() {
         <div
           {...getRootProps()}
           className={`text-center py-2 text-[13px] transition-colors duration-200 ${isDisabled
-            ? "bg-gray-100 cursor-not-allowed"
-            : isDragActive
-              ? "bg-blue-50 cursor-pointer"
-              : "bg-gray-100 hover:bg-gray-200 cursor-pointer"
+              ? "bg-gray-100 cursor-not-allowed"
+              : isDragActive
+                ? "bg-blue-50 cursor-pointer"
+                : "bg-gray-100 hover:bg-gray-200 cursor-pointer"
             }`}
         >
           <input {...getInputProps()} />
@@ -459,11 +458,9 @@ export default function WappCampaign() {
         "campaign_name",
         campaignName
       );
+
       numberList.forEach((n) =>
         formData.append("numbers", n)
-      );
-      priorityNumbers.forEach((n) =>
-        formData.append("priority_numbers", n)
       );
 
       if (files.image) {
@@ -528,7 +525,6 @@ export default function WappCampaign() {
       setCampaignName("");
       setNumbers("");
       setMessage("");
-      setPriorityNumbers([]);
 
       setFiles({
         image: null,
@@ -1264,8 +1260,8 @@ export default function WappCampaign() {
 
       <div
         className={`transition-all duration-200 ${showConfirm || showSuccess
-          ? "pointer-events-none select-none opacity-40"
-          : ""
+            ? "pointer-events-none select-none opacity-40"
+            : ""
           }`}
       >
         <div className="bg-gray-200">
@@ -1372,63 +1368,7 @@ export default function WappCampaign() {
                       }, 0);
                     }}
                     onChange={(e) => {
-                      const newValue = e.target.value;
-                      const inputType = e.nativeEvent?.inputType || "";
-
-                      // Sirf manually keyboard se type kiya gaya text
-                      if (inputType === "insertText") {
-                        const cursorPosition = e.target.selectionStart;
-
-                        // Cursor tak current text
-                        const textBeforeCursor = newValue.substring(
-                          0,
-                          cursorPosition
-                        );
-
-                        // Current line nikalo
-                        const lines = textBeforeCursor.split("\n");
-
-                        const currentLine = lines[lines.length - 1]
-                          .trim();
-
-                        // Sirf digits
-                        const currentNumber = currentLine.replace(
-                          /\D/g,
-                          ""
-                        );
-
-                        /*
-                          Number complete hone par priority mein add hoga.
-                    
-                          Supported:
-                          9876543210
-                          919876543210
-                        */
-                        if (
-                          currentNumber.length === 10 ||
-                          (
-                            currentNumber.length === 12 &&
-                            currentNumber.startsWith("91")
-                          )
-                        ) {
-
-                          setPriorityNumbers((prev) => {
-
-                            if (prev.includes(currentNumber)) {
-                              return prev;
-                            }
-
-                            return [
-                              ...prev,
-                              currentNumber,
-                            ];
-
-                          });
-
-                        }
-                      }
-
-                      setNumbers(newValue);
+                      setNumbers(e.target.value);
                     }}
                     onPaste={() => {
                       setTimeout(() => {

@@ -1812,75 +1812,20 @@ def send_whatsapp(request):
         if isinstance(numbers, str):
             numbers = [numbers]
 
-# ==========================================================
-# NUMBERS — ORDER PRESERVE + REMOVE DUPLICATES
-# ==========================================================
-
-        seen_numbers = set()
-        
-        numbers = [
-            n.strip()
-            for n in numbers
-            if n
-            and n.strip()
-            and not (
-                n.strip() in seen_numbers
-                or seen_numbers.add(n.strip())
-            )
-        ]
-
-        # ==========================================================
-        # 🔥 PRIORITY NUMBERS
-        # ==========================================================
-        
-        priority_numbers = (
-            request.data.getlist("priority_numbers")
-            if hasattr(request.data, "getlist")
-            else request.data.get("priority_numbers", [])
-        )
-        
-        if isinstance(priority_numbers, str):
-            priority_numbers = [priority_numbers]
-        
-        
-        priority_numbers = [
-            n.strip()
-            for n in priority_numbers
-            if n and n.strip()
-        ]
-        
-        
-        # ==========================================================
-        # 🔥 PRIORITY FIRST
-        # ==========================================================
-        
-        if priority_numbers:
-        
-            priority_numbers = [
-                n
-                for n in priority_numbers
-                if n in numbers
-            ]
-        
-            remaining_numbers = [
-                n
+        numbers = list(
+            set(
+                n.strip()
                 for n in numbers
-                if n not in priority_numbers
-            ]
-        
-            # 🔥 MANUALLY TYPED NUMBER FIRST
-            numbers = priority_numbers + remaining_numbers
-        
-        
-        # ==========================================================
-        # VALIDATION
-        # ==========================================================
-        
+                if n and n.strip()
+            )
+        )
+
         if not numbers:
             return Response({
                 "status": "error",
                 "message": "No valid numbers provided"
             })
+
 
         # ==========================================================
         # BASIC DATA
@@ -2410,76 +2355,158 @@ def send_whatsapp(request):
         # THIS IS UNCHANGED
         #
         # ==========================================================
-        
+
         if len(numbers) > 15:
-        
-            # Total original campaign
-            original_total = len(numbers)
-        
-            priority_outcome = None
-            valid_priority_numbers = []
-        
-        
-            # ==========================================
-            # MANUALLY TYPED NUMBERS SEND IMMEDIATELY
-            # ==========================================
-        
-            if priority_numbers:
-        
-                # Sirf campaign mein existing typed numbers
-                seen_priority = set()
-        
-                valid_priority_numbers = [
-                    n
-                    for n in priority_numbers
-                    if n in numbers
-                    and not (
-                        n in seen_priority
-                        or seen_priority.add(n)
-                    )
-                ]
-        
-        
-                if valid_priority_numbers:
-        
-                    # ⚡ SEND TYPED NUMBERS IMMEDIATELY
-                    priority_outcome = _execute_send(
-        
-                        user,
-                        campaign_name,
-                        valid_priority_numbers,
-                        message,
-                        file_list,
-        
-                        dp_url=dp_url,
-        
-                        link_label=link_label,
-                        link_url=link_url,
-        
-                        call_label=call_label,
-                        call_number=call_number,
-                    )
-        
-        
-                    # Remove typed numbers
-                    # so they don't go into pending campaign
-                    numbers = [
-                        n
-                        for n in numbers
-                        if n not in valid_priority_numbers
-                    ]
-        
-        
-            # ==========================================
-            # EXISTING PENDING SYSTEM
-            # DO NOT CHANGE BELOW LOGIC
-            # ==========================================
-        
+
             delay_minutes = random.randint(
                 15,
                 25
             )
-        
+
+
+            complete_at = (
+
+                timezone.now()
+
+                + timedelta(
+                    minutes=delay_minutes
+                )
+
+            )
+
+
+            campaign = Campaign.objects.create(
+
+                user=user,
+
+                campaign_name=campaign_name,
+
+                message=message,
+
+                dp_url=dp_url,
+
+
+                # CTA BUTTONS
+
+                link_label=link_label,
+
+                link_url=link_url,
+
+                call_label=call_label,
+
+                call_number=call_number,
+
+
+                # TOTAL
+
+                total=len(numbers),
+
+
+                # STATS
+
+                success=0,
+
+                failed=0,
+
+                nonwa=0,
+
+                rejected=0,
+
+                results=[],
+
+
+                # PENDING
+
+                status="pending",
+
+                complete_at=complete_at,
+
+
+                # FILES
+
+                file_urls=[
+
+                    f[0]
+
+                    for f in file_list
+
+                ],
+
+
+                # NUMBERS
+
+                number_list=numbers,
+
+            )
+
+
+            notify_admin(
+
+                campaign_name,
+
+                len(numbers),
+
+                0,
+
+                0,
+
+                0,
+
+                0,
+
+                user.username,
+
+                pending=True
+
+            )
+
+
+            log_event(
+
+                "campaign_queued_pending",
+
+                campaign_id=campaign.id,
+
+                total=len(numbers),
+
+                delay_minutes=delay_minutes
+
+            )
+
+
+            return Response({
+
+                "status": "pending",
+
+                "campaign_id": campaign.id,
+
+                "message": (
+
+                    f"Campaign queued. "
+
+                    f"{len(numbers)} numbers — "
+
+                    f"will be processed in "
+
+                    f"{delay_minutes} minutes."
+
+                ),
+
+                "total": len(numbers),
+
+                "credit_left": credit_left,
+
+                "file_urls": [
+
+                    f[0]
+
+                    for f in file_list
+
+                ],
+
+            })
+
+
         # ==========================================================
         #
         # NORMAL CAMPAIGN
