@@ -37,10 +37,10 @@ function parseAndValidateNumbers(raw) {
 // 🔥 TOAST CONFIG
 // ─────────────────────────────────────────────
 const TOAST_STYLES = {
-  error:   { icon: "✕", accent: "#F86C6B", bg: "linear-gradient(135deg, #fff5f5, #ffffff)", ring: "#F86C6B33" },
+  error: { icon: "✕", accent: "#F86C6B", bg: "linear-gradient(135deg, #fff5f5, #ffffff)", ring: "#F86C6B33" },
   warning: { icon: "⚠", accent: "#F0AD4E", bg: "linear-gradient(135deg, #fffaf0, #ffffff)", ring: "#F0AD4E33" },
   success: { icon: "✓", accent: "#4DBD74", bg: "linear-gradient(135deg, #f3fdf7, #ffffff)", ring: "#4DBD7433" },
-  info:    { icon: "ℹ", accent: "#20A8D8", bg: "linear-gradient(135deg, #f0f9fd, #ffffff)", ring: "#20A8D833" },
+  info: { icon: "ℹ", accent: "#20A8D8", bg: "linear-gradient(135deg, #f0f9fd, #ffffff)", ring: "#20A8D833" },
 };
 
 export default function WappDpCampaign() {
@@ -160,9 +160,8 @@ export default function WappDpCampaign() {
 
         <div
           {...getRootProps()}
-          className={`text-center py-4 text-[13px] cursor-pointer transition-colors duration-200 ${
-            isDragActive ? "bg-blue-50" : "bg-gray-100 hover:bg-gray-200"
-          }`}
+          className={`text-center py-4 text-[13px] cursor-pointer transition-colors duration-200 ${isDragActive ? "bg-blue-50" : "bg-gray-100 hover:bg-gray-200"
+            }`}
         >
           <input {...getInputProps()} />
 
@@ -242,29 +241,29 @@ export default function WappDpCampaign() {
       formData.append("campaign_name", campaignName);
       formData.append("campaign_type", "dp_campaign");
       // CTA BUTTONS
-if (linkUrl && linkUrl.trim()) {
-  formData.append(
-    "link_label",
-    linkLabel?.trim() || "Visit Now"
-  );
+      if (linkUrl && linkUrl.trim()) {
+        formData.append(
+          "link_label",
+          linkLabel?.trim() || "Visit Now"
+        );
 
-  formData.append(
-    "link_url",
-    linkUrl.trim()
-  );
-}
+        formData.append(
+          "link_url",
+          linkUrl.trim()
+        );
+      }
 
-if (callNumber && callNumber.trim()) {
-  formData.append(
-    "call_label",
-    callLabel?.trim() || "Call Now"
-  );
+      if (callNumber && callNumber.trim()) {
+        formData.append(
+          "call_label",
+          callLabel?.trim() || "Call Now"
+        );
 
-  formData.append(
-    "call_number",
-    callNumber.trim()
-  );
-}
+        formData.append(
+          "call_number",
+          callNumber.trim()
+        );
+      }
       numberList.forEach((n) => formData.append("numbers", n));
       if (dp) formData.append("dp", dp);
 
@@ -279,7 +278,7 @@ if (callNumber && callNumber.trim()) {
         }
       }
 
-      const res  = await fetch("https://latestchatway.onrender.com/api/send-whatsapp/", { method: "POST", body: formData });
+      const res = await fetch("https://latestchatway.onrender.com/api/send-whatsapp/", { method: "POST", body: formData });
       const data = await res.json();
 
       if (data.status === "error") {
@@ -699,8 +698,35 @@ if (callNumber && callNumber.trim()) {
                   </p>
                   <textarea
                     value={numbers}
-                    onChange={(e) => setNumbers(e.target.value)}
-                    onPaste={() => setTimeout(cleanNumbersField, 0)}
+                    onFocus={(e) => {
+                      // Cursor hamesha last mein rahega
+                      const length = e.target.value.length;
+                      setTimeout(() => {
+                        e.target.setSelectionRange(length, length);
+                      }, 0);
+                    }}
+                    onClick={(e) => {
+                      // Beech mein click karne par bhi cursor last mein jayega
+                      const length = e.target.value.length;
+                      setTimeout(() => {
+                        e.target.setSelectionRange(length, length);
+                      }, 0);
+                    }}
+                    onChange={(e) => {
+                      setNumbers(e.target.value);
+                    }}
+                    onPaste={() => {
+                      setTimeout(() => {
+                        cleanNumbersField();
+
+                        // Paste ke baad cursor last mein
+                        const textarea = document.activeElement;
+                        if (textarea && textarea.tagName === "TEXTAREA") {
+                          const length = textarea.value.length;
+                          textarea.setSelectionRange(length, length);
+                        }
+                      }, 0);
+                    }}
                     onBlur={cleanNumbersField}
                     className="wc-textarea w-full h-[500px] border border-green-400 rounded px-2 py-2 text-[13px] outline-none resize-none"
                   />

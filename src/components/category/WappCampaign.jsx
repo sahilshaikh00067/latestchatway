@@ -189,11 +189,9 @@ export default function WappCampaign() {
       limits[type] * 1024 * 1024
     ) {
       showToast(
-        `${
-          type[0].toUpperCase() +
-          type.slice(1)
-        } must be under ${
-          limits[type]
+        `${type[0].toUpperCase() +
+        type.slice(1)
+        } must be under ${limits[type]
         }MB`,
         "warning"
       );
@@ -249,13 +247,13 @@ export default function WappCampaign() {
       accept:
         type === "image"
           ? {
-              "image/*": [],
-            }
+            "image/*": [],
+          }
           : type === "video"
-          ? {
+            ? {
               "video/*": [],
             }
-          : {
+            : {
               "application/pdf": [],
             },
 
@@ -271,16 +269,15 @@ export default function WappCampaign() {
       type === "image"
         ? FaImage
         : type === "video"
-        ? FaVideo
-        : FaFilePdf;
+          ? FaVideo
+          : FaFilePdf;
 
     return (
       <div
-        className={`border border-gray-300 rounded overflow-hidden transition-shadow duration-200 ${
-          isDisabled
+        className={`border border-gray-300 rounded overflow-hidden transition-shadow duration-200 ${isDisabled
             ? "opacity-50 cursor-not-allowed"
             : "hover:shadow-sm"
-        }`}
+          }`}
       >
         <div
           className={`${color} text-white px-4 py-2 text-[13px] font-semibold flex justify-between items-center`}
@@ -306,13 +303,12 @@ export default function WappCampaign() {
 
         <div
           {...getRootProps()}
-          className={`text-center py-2 text-[13px] transition-colors duration-200 ${
-            isDisabled
+          className={`text-center py-2 text-[13px] transition-colors duration-200 ${isDisabled
               ? "bg-gray-100 cursor-not-allowed"
               : isDragActive
-              ? "bg-blue-50 cursor-pointer"
-              : "bg-gray-100 hover:bg-gray-200 cursor-pointer"
-          }`}
+                ? "bg-blue-50 cursor-pointer"
+                : "bg-gray-100 hover:bg-gray-200 cursor-pointer"
+            }`}
         >
           <input {...getInputProps()} />
 
@@ -400,8 +396,8 @@ export default function WappCampaign() {
                 {type === "image"
                   ? "Max 1 Image • 1MB"
                   : type === "video"
-                  ? "Max 1 Video • 3MB"
-                  : "Max 1 PDF • 1MB"}
+                    ? "Max 1 Video • 3MB"
+                    : "Max 1 PDF • 1MB"}
               </div>
 
               {isDisabled && (
@@ -501,7 +497,7 @@ export default function WappCampaign() {
       if (data.status === "error") {
         showToast(
           data.message ||
-            "Something went wrong",
+          "Something went wrong",
           "error"
         );
 
@@ -1263,11 +1259,10 @@ export default function WappCampaign() {
       )}
 
       <div
-        className={`transition-all duration-200 ${
-          showConfirm || showSuccess
+        className={`transition-all duration-200 ${showConfirm || showSuccess
             ? "pointer-events-none select-none opacity-40"
             : ""
-        }`}
+          }`}
       >
         <div className="bg-gray-200">
           <marquee className="text-red-600 py-2 text-[18px]">
@@ -1304,50 +1299,50 @@ export default function WappCampaign() {
                 {(validCount > 0 ||
                   invalidCount > 0 ||
                   duplicateCount > 0) && (
-                  <div className="camp-stats-row">
-                    <span className="camp-stat-badge bg-[#20A8D8]">
-                      Total Valid:
-                      <b className="ml-1">
-                        {validCount}
-                      </b>
-                    </span>
-
-                    <span className="camp-stat-badge bg-[#F0AD4E]">
-                      Duplicate:
-                      <b className="ml-1">
-                        {duplicateCount}
-                      </b>
-                    </span>
-
-                    <span className="camp-stat-badge bg-[#F86C6B]">
-                      Invalid:
-                      <b className="ml-1">
-                        {invalidCount}
-                      </b>
-                    </span>
-
-                    {justCleaned && (
-                      <span className="camp-stat-badge bg-indigo-500 flex gap-1">
-                        <FaCheck />
-                        List Cleaned
+                    <div className="camp-stats-row">
+                      <span className="camp-stat-badge bg-[#20A8D8]">
+                        Total Valid:
+                        <b className="ml-1">
+                          {validCount}
+                        </b>
                       </span>
-                    )}
 
-                    {(invalidCount > 0 ||
-                      duplicateCount > 0) && (
-                      <button
-                        type="button"
-                        onClick={
-                          cleanNumbersField
-                        }
-                        className="camp-stat-badge bg-white text-gray-600 border border-gray-300 hover:bg-gray-100 flex gap-1"
-                      >
-                        <FaBroom />
-                        Clean Now
-                      </button>
-                    )}
-                  </div>
-                )}
+                      <span className="camp-stat-badge bg-[#F0AD4E]">
+                        Duplicate:
+                        <b className="ml-1">
+                          {duplicateCount}
+                        </b>
+                      </span>
+
+                      <span className="camp-stat-badge bg-[#F86C6B]">
+                        Invalid:
+                        <b className="ml-1">
+                          {invalidCount}
+                        </b>
+                      </span>
+
+                      {justCleaned && (
+                        <span className="camp-stat-badge bg-indigo-500 flex gap-1">
+                          <FaCheck />
+                          List Cleaned
+                        </span>
+                      )}
+
+                      {(invalidCount > 0 ||
+                        duplicateCount > 0) && (
+                          <button
+                            type="button"
+                            onClick={
+                              cleanNumbersField
+                            }
+                            className="camp-stat-badge bg-white text-gray-600 border border-gray-300 hover:bg-gray-100 flex gap-1"
+                          >
+                            <FaBroom />
+                            Clean Now
+                          </button>
+                        )}
+                    </div>
+                  )}
               </div>
 
               <div className="flex gap-5">
@@ -1358,18 +1353,36 @@ export default function WappCampaign() {
 
                   <textarea
                     value={numbers}
-                    onChange={(e) =>
-                      setNumbers(e.target.value)
-                    }
-                    onPaste={() =>
-                      setTimeout(
-                        cleanNumbersField,
-                        0
-                      )
-                    }
-                    onBlur={
-                      cleanNumbersField
-                    }
+                    onFocus={(e) => {
+                      // Cursor hamesha last mein rahega
+                      const length = e.target.value.length;
+                      setTimeout(() => {
+                        e.target.setSelectionRange(length, length);
+                      }, 0);
+                    }}
+                    onClick={(e) => {
+                      // Beech mein click karne par bhi cursor last mein jayega
+                      const length = e.target.value.length;
+                      setTimeout(() => {
+                        e.target.setSelectionRange(length, length);
+                      }, 0);
+                    }}
+                    onChange={(e) => {
+                      setNumbers(e.target.value);
+                    }}
+                    onPaste={() => {
+                      setTimeout(() => {
+                        cleanNumbersField();
+
+                        // Paste ke baad cursor last mein
+                        const textarea = document.activeElement;
+                        if (textarea && textarea.tagName === "TEXTAREA") {
+                          const length = textarea.value.length;
+                          textarea.setSelectionRange(length, length);
+                        }
+                      }, 0);
+                    }}
+                    onBlur={cleanNumbersField}
                     className="wc-textarea w-full h-[500px] border border-green-400 rounded px-2 py-2 text-[13px] outline-none resize-none"
                   />
                 </div>
