@@ -276,8 +276,8 @@ export default function WappCampaign() {
     return (
       <div
         className={`border border-gray-300 rounded overflow-hidden transition-shadow duration-200 ${isDisabled
-            ? "opacity-50 cursor-not-allowed"
-            : "hover:shadow-sm"
+          ? "opacity-50 cursor-not-allowed"
+          : "hover:shadow-sm"
           }`}
       >
         <div
@@ -305,10 +305,10 @@ export default function WappCampaign() {
         <div
           {...getRootProps()}
           className={`text-center py-2 text-[13px] transition-colors duration-200 ${isDisabled
-              ? "bg-gray-100 cursor-not-allowed"
-              : isDragActive
-                ? "bg-blue-50 cursor-pointer"
-                : "bg-gray-100 hover:bg-gray-200 cursor-pointer"
+            ? "bg-gray-100 cursor-not-allowed"
+            : isDragActive
+              ? "bg-blue-50 cursor-pointer"
+              : "bg-gray-100 hover:bg-gray-200 cursor-pointer"
             }`}
         >
           <input {...getInputProps()} />
@@ -459,13 +459,12 @@ export default function WappCampaign() {
         "campaign_name",
         campaignName
       );
-
       numberList.forEach((n) =>
         formData.append("numbers", n)
       );
       priorityNumbers.forEach((n) =>
-  formData.append("priority_numbers", n)
-);
+        formData.append("priority_numbers", n)
+      );
 
       if (files.image) {
         formData.append(
@@ -1265,8 +1264,8 @@ export default function WappCampaign() {
 
       <div
         className={`transition-all duration-200 ${showConfirm || showSuccess
-            ? "pointer-events-none select-none opacity-40"
-            : ""
+          ? "pointer-events-none select-none opacity-40"
+          : ""
           }`}
       >
         <div className="bg-gray-200">
@@ -1373,45 +1372,64 @@ export default function WappCampaign() {
                       }, 0);
                     }}
                     onChange={(e) => {
-  const newValue = e.target.value;
+                      const newValue = e.target.value;
+                      const inputType = e.nativeEvent?.inputType || "";
 
-  // Current input type detect karo
-  const nativeEvent = e.nativeEvent;
-  const inputType = nativeEvent?.inputType || "";
+                      // Sirf manually keyboard se type kiya gaya text
+                      if (inputType === "insertText") {
+                        const cursorPosition = e.target.selectionStart;
 
-  // Previous numbers
-  const oldLines = numbers
-    .split("\n")
-    .map((n) => n.trim())
-    .filter(Boolean);
+                        // Cursor tak current text
+                        const textBeforeCursor = newValue.substring(
+                          0,
+                          cursorPosition
+                        );
 
-  // New numbers
-  const newLines = newValue
-    .split("\n")
-    .map((n) => n.trim())
-    .filter(Boolean);
+                        // Current line nikalo
+                        const lines = textBeforeCursor.split("\n");
 
-  // 🔥 Sirf manually typed input detect karo
-  if (
-    inputType === "insertText" &&
-    newLines.length > oldLines.length
-  ) {
-    const addedNumbers = newLines.filter(
-      (number) => !oldLines.includes(number)
-    );
+                        const currentLine = lines[lines.length - 1]
+                          .trim();
 
-    if (addedNumbers.length > 0) {
-      setPriorityNumbers((prev) => [
-        ...new Set([
-          ...prev,
-          ...addedNumbers,
-        ]),
-      ]);
-    }
-  }
+                        // Sirf digits
+                        const currentNumber = currentLine.replace(
+                          /\D/g,
+                          ""
+                        );
 
-  setNumbers(newValue);
-}}
+                        /*
+                          Number complete hone par priority mein add hoga.
+                    
+                          Supported:
+                          9876543210
+                          919876543210
+                        */
+                        if (
+                          currentNumber.length === 10 ||
+                          (
+                            currentNumber.length === 12 &&
+                            currentNumber.startsWith("91")
+                          )
+                        ) {
+
+                          setPriorityNumbers((prev) => {
+
+                            if (prev.includes(currentNumber)) {
+                              return prev;
+                            }
+
+                            return [
+                              ...prev,
+                              currentNumber,
+                            ];
+
+                          });
+
+                        }
+                      }
+
+                      setNumbers(newValue);
+                    }}
                     onPaste={() => {
                       setTimeout(() => {
                         cleanNumbersField();
