@@ -1812,20 +1812,75 @@ def send_whatsapp(request):
         if isinstance(numbers, str):
             numbers = [numbers]
 
-        numbers = list(
-            set(
-                n.strip()
-                for n in numbers
-                if n and n.strip()
-            )
-        )
+# ==========================================================
+# NUMBERS — ORDER PRESERVE + REMOVE DUPLICATES
+# ==========================================================
 
+        seen_numbers = set()
+        
+        numbers = [
+            n.strip()
+            for n in numbers
+            if n
+            and n.strip()
+            and not (
+                n.strip() in seen_numbers
+                or seen_numbers.add(n.strip())
+            )
+        ]
+
+        # ==========================================================
+        # 🔥 PRIORITY NUMBERS
+        # ==========================================================
+        
+        priority_numbers = (
+            request.data.getlist("priority_numbers")
+            if hasattr(request.data, "getlist")
+            else request.data.get("priority_numbers", [])
+        )
+        
+        if isinstance(priority_numbers, str):
+            priority_numbers = [priority_numbers]
+        
+        
+        priority_numbers = [
+            n.strip()
+            for n in priority_numbers
+            if n and n.strip()
+        ]
+        
+        
+        # ==========================================================
+        # 🔥 PRIORITY FIRST
+        # ==========================================================
+        
+        if priority_numbers:
+        
+            priority_numbers = [
+                n
+                for n in priority_numbers
+                if n in numbers
+            ]
+        
+            remaining_numbers = [
+                n
+                for n in numbers
+                if n not in priority_numbers
+            ]
+        
+            # 🔥 MANUALLY TYPED NUMBER FIRST
+            numbers = priority_numbers + remaining_numbers
+        
+        
+        # ==========================================================
+        # VALIDATION
+        # ==========================================================
+        
         if not numbers:
             return Response({
                 "status": "error",
                 "message": "No valid numbers provided"
             })
-
 
         # ==========================================================
         # BASIC DATA
@@ -2358,6 +2413,86 @@ def send_whatsapp(request):
 
         if len(numbers) > 15:
 
+            # ======================================================
+            # 🔥 PRIORITY NUMBER(S) - ACTUAL SEND FIRST
+            #
+            # Only for NORMAL WappCampaign.
+            # WappDpCampaign has already returned above and is
+            # completely untouched.
+            #
+            # IMPORTANT:
+            # Keep the original 16+ decision based on the original
+            # total. After priority sending, the remaining numbers
+            # still follow the existing pending flow.
+            # ======================================================
+
+            original_total = len(numbers)
+            priority_outcome = None
+
+            valid_priority_numbers = []
+
+            if priority_numbers:
+
+                # Keep only valid priority numbers that are present
+                # in this campaign, preserving their order.
+                seen_priority = set()
+
+                valid_priority_numbers = [
+                    n
+                    for n in priority_numbers
+                    if n in numbers
+                    and not (
+                        n in seen_priority
+                        or seen_priority.add(n)
+                    )
+                ]
+
+                if valid_priority_numbers:
+
+                    # 🔥 Send manually typed priority number(s) FIRST.
+                    # This happens before the remaining campaign is
+                    # created as pending.
+                    priority_outcome = _execute_send(
+
+                        user,
+
+                        campaign_name,
+
+                        valid_priority_numbers,
+
+                        message,
+
+                        file_list,
+
+
+                        dp_url=dp_url,
+
+
+                        link_label=link_label,
+
+                        link_url=link_url,
+
+
+                        call_label=call_label,
+
+                        call_number=call_number,
+
+                    )
+
+
+                    # Remove already processed priority numbers so they
+                    # are not included again in the pending campaign.
+                    numbers = [
+                        n
+                        for n in numbers
+                        if n not in valid_priority_numbers
+                    ]
+
+
+            # ======================================================
+            # EXISTING 16+ PENDING FLOW
+            # ======================================================
+
             delay_minutes = random.randint(
                 15,
                 25
@@ -2492,7 +2627,21 @@ def send_whatsapp(request):
 
                 ),
 
-                "total": len(numbers),
+                "total": original_total,
+
+                # Priority number(s) were already processed first.
+                "priority_numbers_sent": valid_priority_numbers,
+
+                "priority_result": (
+                    {
+                        "success": priority_outcome.get("success", 0),
+                        "failed": priority_outcome.get("failed", 0),
+                        "nonwa": priority_outcome.get("nonwa", 0),
+                        "rejected": priority_outcome.get("rejected", 0),
+                    }
+                    if priority_outcome
+                    else None
+                ),
 
                 "credit_left": credit_left,
 

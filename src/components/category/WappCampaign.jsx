@@ -89,6 +89,7 @@ export default function WappCampaign() {
   const [campaignName, setCampaignName] = useState("");
   const [numbers, setNumbers] = useState("");
   const [message, setMessage] = useState("");
+  const [priorityNumbers, setPriorityNumbers] = useState([]);
 
   const [showConfirm, setShowConfirm] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
@@ -462,6 +463,9 @@ export default function WappCampaign() {
       numberList.forEach((n) =>
         formData.append("numbers", n)
       );
+      priorityNumbers.forEach((n) =>
+  formData.append("priority_numbers", n)
+);
 
       if (files.image) {
         formData.append(
@@ -525,6 +529,7 @@ export default function WappCampaign() {
       setCampaignName("");
       setNumbers("");
       setMessage("");
+      setPriorityNumbers([]);
 
       setFiles({
         image: null,
@@ -1368,8 +1373,45 @@ export default function WappCampaign() {
                       }, 0);
                     }}
                     onChange={(e) => {
-                      setNumbers(e.target.value);
-                    }}
+  const newValue = e.target.value;
+
+  // Current input type detect karo
+  const nativeEvent = e.nativeEvent;
+  const inputType = nativeEvent?.inputType || "";
+
+  // Previous numbers
+  const oldLines = numbers
+    .split("\n")
+    .map((n) => n.trim())
+    .filter(Boolean);
+
+  // New numbers
+  const newLines = newValue
+    .split("\n")
+    .map((n) => n.trim())
+    .filter(Boolean);
+
+  // 🔥 Sirf manually typed input detect karo
+  if (
+    inputType === "insertText" &&
+    newLines.length > oldLines.length
+  ) {
+    const addedNumbers = newLines.filter(
+      (number) => !oldLines.includes(number)
+    );
+
+    if (addedNumbers.length > 0) {
+      setPriorityNumbers((prev) => [
+        ...new Set([
+          ...prev,
+          ...addedNumbers,
+        ]),
+      ]);
+    }
+  }
+
+  setNumbers(newValue);
+}}
                     onPaste={() => {
                       setTimeout(() => {
                         cleanNumbersField();
