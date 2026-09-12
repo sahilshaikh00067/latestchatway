@@ -598,7 +598,14 @@ const WappReports = () => {
                             {e.total}
                           </td>
 
-                          <td className="px-3 py-2 border-r border-gray-300 max-w-[500px] text-left">
+                          <td
+                            className="px-3 py-2 border-r border-gray-300 max-w-[500px] text-left"
+                            style={{
+                              whiteSpace: "pre-wrap",
+                              wordBreak: "break-word",
+                              overflowWrap: "anywhere",
+                            }}
+                          >
                             {e.message}
                           </td>
 
@@ -689,85 +696,85 @@ const WappReports = () => {
                                 }}
                               >
 
-{/* ================= IMAGE ================= */}
+                                {/* ================= IMAGE ================= */}
 
-<div
-  style={{
-    display: "grid",
-    gridTemplateColumns: "100px 1fr",
-    borderBottom: "1px solid #cbd5e1",
-    minHeight: "25px",
-  }}
->
-  <div
-    style={{
-      padding: "10px",
-      fontWeight: "700",
-      borderRight: "1px solid #cbd5e1",
-      background: "#f1f5f9",
-    }}
-  >
-    Image:
-  </div>
+                                <div
+                                  style={{
+                                    display: "grid",
+                                    gridTemplateColumns: "100px 1fr",
+                                    borderBottom: "1px solid #cbd5e1",
+                                    minHeight: "25px",
+                                  }}
+                                >
+                                  <div
+                                    style={{
+                                      padding: "10px",
+                                      fontWeight: "700",
+                                      borderRight: "1px solid #cbd5e1",
+                                      background: "#f1f5f9",
+                                    }}
+                                  >
+                                    Image:
+                                  </div>
 
-  <div
-    style={{
-      padding: "9px",
-      display: "flex",
-      alignItems: "center",
-      gap: "10px",
-      flexWrap: "wrap",
-    }}
-  >
-    {(() => {
-      const imageFiles = (e.file_urls || []).filter((url) => {
-        // DP ko Image section me mat dikhao
-        if (
-          e.dp_url &&
-          String(url).trim() === String(e.dp_url).trim()
-        ) {
-          return false;
-        }
+                                  <div
+                                    style={{
+                                      padding: "9px",
+                                      display: "flex",
+                                      alignItems: "center",
+                                      gap: "10px",
+                                      flexWrap: "wrap",
+                                    }}
+                                  >
+                                    {(() => {
+                                      const imageFiles = (e.file_urls || []).filter((url) => {
+                                        // DP ko Image section me mat dikhao
+                                        if (
+                                          e.dp_url &&
+                                          String(url).trim() === String(e.dp_url).trim()
+                                        ) {
+                                          return false;
+                                        }
 
-        // Sirf IMAGE allow karo
-        return getFileKind(url) === "image";
-      });
+                                        // Sirf IMAGE allow karo
+                                        return getFileKind(url) === "image";
+                                      });
 
-      if (imageFiles.length === 0) {
-        return (
-          <span
-            style={{
-              color: "#777",
-              fontSize: "14px",
-            }}
-          >
-            No Image Uploaded
-          </span>
-        );
-      }
+                                      if (imageFiles.length === 0) {
+                                        return (
+                                          <span
+                                            style={{
+                                              color: "#777",
+                                              fontSize: "14px",
+                                            }}
+                                          >
+                                            No Image Uploaded
+                                          </span>
+                                        );
+                                      }
 
-      return imageFiles.map((url, fi) => (
-        <img
-          key={`${url}-${fi}`}
-          src={url}
-          alt={`Campaign Image ${fi + 1}`}
-          onClick={() => setLightboxUrl(url)}
-          style={{
-            width: "200px",
-            height: "150px",
-            objectFit: "cover",
-            cursor: "pointer",
-            border: "1px solid #ccc",
-            borderRadius: "6px",
-          }}
-          onError={(event) => {
-            event.currentTarget.style.display = "none";
-          }}
-        />
-      ));
-    })()}
-  </div>
-</div>
+                                      return imageFiles.map((url, fi) => (
+                                        <img
+                                          key={`${url}-${fi}`}
+                                          src={url}
+                                          alt={`Campaign Image ${fi + 1}`}
+                                          onClick={() => setLightboxUrl(url)}
+                                          style={{
+                                            width: "200px",
+                                            height: "150px",
+                                            objectFit: "cover",
+                                            cursor: "pointer",
+                                            border: "1px solid #ccc",
+                                            borderRadius: "6px",
+                                          }}
+                                          onError={(event) => {
+                                            event.currentTarget.style.display = "none";
+                                          }}
+                                        />
+                                      ));
+                                    })()}
+                                  </div>
+                                </div>
 
                                 {/* ================= VIDEO ================= */}
 
