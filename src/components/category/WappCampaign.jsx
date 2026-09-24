@@ -275,8 +275,8 @@ export default function WappCampaign() {
     return (
       <div
         className={`border border-gray-300 rounded overflow-hidden transition-shadow duration-200 ${isDisabled
-            ? "opacity-50 cursor-not-allowed"
-            : "hover:shadow-sm"
+          ? "opacity-50 cursor-not-allowed"
+          : "hover:shadow-sm"
           }`}
       >
         <div
@@ -304,10 +304,10 @@ export default function WappCampaign() {
         <div
           {...getRootProps()}
           className={`text-center py-2 text-[13px] transition-colors duration-200 ${isDisabled
-              ? "bg-gray-100 cursor-not-allowed"
-              : isDragActive
-                ? "bg-blue-50 cursor-pointer"
-                : "bg-gray-100 hover:bg-gray-200 cursor-pointer"
+            ? "bg-gray-100 cursor-not-allowed"
+            : isDragActive
+              ? "bg-blue-50 cursor-pointer"
+              : "bg-gray-100 hover:bg-gray-200 cursor-pointer"
             }`}
         >
           <input {...getInputProps()} />
@@ -495,11 +495,17 @@ export default function WappCampaign() {
       const data = await res.json();
 
       if (data.status === "error") {
-        showToast(
-          data.message ||
-          "Something went wrong",
-          "error"
-        );
+        if (data.daily_limit_reached) {
+          showToast(
+            `Daily campaign limit reached. You have already created ${data.today_campaign_count} campaigns today. Please try again tomorrow.`,
+            "warning"
+          );
+        } else {
+          showToast(
+            data.message || "Something went wrong",
+            "error"
+          );
+        }
 
         setLoading(false);
         return;
@@ -1260,8 +1266,8 @@ export default function WappCampaign() {
 
       <div
         className={`transition-all duration-200 ${showConfirm || showSuccess
-            ? "pointer-events-none select-none opacity-40"
-            : ""
+          ? "pointer-events-none select-none opacity-40"
+          : ""
           }`}
       >
         <div className="bg-gray-200">

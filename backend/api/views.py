@@ -309,6 +309,31 @@ def refund_credit(user_id, amount, description):
     except User.DoesNotExist:
         logger.error("refund_credit: user %s not found while refunding %s", user_id, amount)
 
+# ==========================================================
+# DAILY CAMPAIGN LIMIT
+# Maximum 5 campaigns per user per calendar day
+# ==========================================================
+
+DAILY_CAMPAIGN_LIMIT = 5
+
+
+def get_today_campaign_count(user):
+    now = timezone.localtime(timezone.now())
+
+    start_of_day = now.replace(
+        hour=0,
+        minute=0,
+        second=0,
+        microsecond=0,
+    )
+
+    end_of_day = start_of_day + timedelta(days=1)
+
+    return Campaign.objects.filter(
+        user=user,
+        created_at__gte=start_of_day,
+        created_at__lt=end_of_day,
+    ).count()
 
 @api_view(['GET'])
 def health_check(request):
@@ -1928,19 +1953,44 @@ def send_whatsapp(request):
         )
 
 
+
+
+
+        # ==========================================================
+        # DAILY CAMPAIGN LIMIT
+        # USER + RESELLER = 5 CAMPAIGNS / DAY
+        # ADMIN = UNLIMITED
+        # ==========================================================
+        
+        user = User.objects.get(id=user_id)
+        
+        if not user.is_admin():
+        
+            today_campaign_count = get_today_campaign_count(user)
+        
+            if today_campaign_count >= DAILY_CAMPAIGN_LIMIT:
+                return Response({
+                    "status": "error",
+                    "daily_limit_reached": True,
+                    "today_campaign_count": today_campaign_count,
+                    "daily_campaign_limit": DAILY_CAMPAIGN_LIMIT,
+                    "message": (
+                        "Daily campaign limit reached. "
+                        "You have already created 5 campaigns today. "
+                        "You can create campaigns again tomorrow."
+                    ),
+                })
+        
+        
         # ==========================================================
         # RESERVE CREDIT
         # ==========================================================
-
+        
         ok, err, credit_left, user = reserve_credit(
-
             user_id,
-
             len(numbers),
-
             f"Campaign '{campaign_name}' — "
             f"{len(numbers)} numbers charged"
-
         )
 
 
