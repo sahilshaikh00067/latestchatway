@@ -2,6 +2,7 @@ import React, { useState, useRef, useCallback } from "react";
 import { useDropzone } from "react-dropzone";
 import { FaComments } from "react-icons/fa";
 
+
 // ─────────────────────────────────────────────
 // 🔥 NUMBER VALIDATION HELPER
 // ─────────────────────────────────────────────
@@ -305,7 +306,23 @@ export default function WappDpCampaign() {
   };
 
   const handleSendClick = () => {
-    if (!campaignName || !numbers || !message) { showToast("Please fill all fields", "warning"); return; }
+    if (!campaignName || !numbers || !message) {
+      showToast("Please fill all fields", "warning");
+      return;
+    }
+
+    // DP Campaign:
+    // 1–10 = Testing allowed
+    // 11–4999 = Not allowed
+    // 5000+ = Allowed
+    if (validCount > 10 && validCount < 5000) {
+      showToast(
+        `DP Campaign requires minimum 5,000 numbers. Current: ${validCount}`,
+        "error"
+      );
+      return;
+    }
+
     setShowConfirm(true);
   };
 
@@ -632,10 +649,1037 @@ export default function WappDpCampaign() {
       {/* ══════════════════════════════════════════════════════ */}
       <div className={`transition-all duration-200 ${(showConfirm || showSuccess) ? "pointer-events-none select-none opacity-40" : ""}`}>
 
-        <div className="bg-gray-200">
-          <marquee className="text-red-600 py-2 text-[18px]">
-            NOTE = All campaigns will be delivered Between 10A.M to 6P.M - (Monday to Saturday)
-          </marquee>
+        {/* 🚀 PREMIUM DP CAMPAIGN ANIMATED NOTICE */}
+        <div className="dp-premium-notice">
+
+          {/* Background Glow */}
+          <div className="dp-glow dp-glow-1"></div>
+          <div className="dp-glow dp-glow-2"></div>
+
+          {/* Moving Content */}
+          <div className="dp-premium-track">
+
+            {/* Animated Boy */}
+            <div className="dp-boy-wrapper">
+
+              <div className="dp-boy">
+                <div className="dp-boy-shadow"></div>
+
+                <div className="dp-boy-head">👨🏻‍💻</div>
+
+                <div className="dp-boy-body">
+                  <span className="dp-arm dp-arm-back"></span>
+                  <span className="dp-arm dp-arm-front"></span>
+                </div>
+
+                {/* Walking legs */}
+                <div className="dp-leg dp-leg-left"></div>
+                <div className="dp-leg dp-leg-right"></div>
+              </div>
+
+              {/* Rope */}
+              <div className="dp-rope">
+                <span></span>
+                <span></span>
+                <span></span>
+              </div>
+
+            </div>
+
+            {/* Premium Notice Card */}
+            <div className="dp-premium-card">
+
+              <div className="dp-live-dot"></div>
+
+              <div className="dp-main-icon">
+                🚀
+              </div>
+
+              <div className="dp-content">
+
+                <div className="dp-heading">
+                  WAPP DP CAMPAIGN
+                  <span className="dp-live-badge">
+                    LIVE
+                  </span>
+
+
+                  <div className="dp-rules">
+
+                    <span className="dp-rule production">
+                      🚀 MINIMUM
+                      <strong>5,000 valid numbers are required to run a DP Campaign</strong>
+                    </span>
+
+                    <span className="dp-separator">✦</span>
+
+                    <span className="dp-rule testing">
+                      🧪 REQUIREMENT
+                      <strong>A minimum of 5,000 valid numbers is required before submission</strong>
+                    </span>
+
+                    <span className="dp-separator">✦</span>
+
+                    <span className="dp-rule timing">
+                      ⏰ <strong>Campaign Processing: 10 AM – 6 PM</strong>
+                    </span>
+
+                  </div>
+                </div>
+
+
+
+              </div>
+
+              {/* Shine */}
+              <div className="dp-card-shine"></div>
+
+            </div>
+
+            {/* Floating Particles */}
+            <span className="dp-particle p1">✦</span>
+            <span className="dp-particle p2">•</span>
+            <span className="dp-particle p3">✦</span>
+            <span className="dp-particle p4">•</span>
+
+          </div>
+
+          <style>
+            {`
+
+      /* =========================================
+         PREMIUM DP NOTICE
+      ========================================= */
+
+      .dp-premium-notice {
+        width: 100%;
+        height: 66px;
+        position: relative;
+        overflow: hidden;
+
+        display: flex;
+        align-items: center;
+
+        background:
+          radial-gradient(
+            circle at 20% 50%,
+            rgba(32,168,216,0.13),
+            transparent 35%
+          ),
+          radial-gradient(
+            circle at 80% 50%,
+            rgba(99,102,241,0.10),
+            transparent 35%
+          ),
+          linear-gradient(
+            90deg,
+            #f3fbff,
+            #ffffff,
+            #f4f9ff
+          );
+
+        border-top: 1px solid rgba(32,168,216,0.25);
+        border-bottom: 1px solid rgba(32,168,216,0.25);
+
+        box-shadow:
+          inset 0 1px 0 rgba(255,255,255,0.9),
+          0 4px 18px rgba(32,168,216,0.08);
+      }
+
+
+      /* =========================================
+         BACKGROUND GLOW
+      ========================================= */
+
+      .dp-glow {
+        position: absolute;
+        width: 180px;
+        height: 180px;
+
+        border-radius: 50%;
+
+        filter: blur(45px);
+
+        pointer-events: none;
+
+        animation: dpGlowMove 5s ease-in-out infinite alternate;
+      }
+
+      .dp-glow-1 {
+        left: 5%;
+        top: -100px;
+        background: rgba(32,168,216,0.12);
+      }
+
+      .dp-glow-2 {
+        right: 8%;
+        bottom: -110px;
+        background: rgba(99,102,241,0.10);
+        animation-delay: 1.5s;
+      }
+
+
+      /* =========================================
+         MOVING TRACK
+      ========================================= */
+
+      .dp-premium-track {
+        position: absolute;
+
+        display: flex;
+        align-items: center;
+
+        width: max-content;
+
+        white-space: nowrap;
+
+        animation:
+          dpPremiumMove
+          20s
+          linear
+          infinite;
+
+        will-change: transform;
+      }
+
+
+      /* =========================================
+         BOY WRAPPER
+      ========================================= */
+
+      .dp-boy-wrapper {
+        display: flex;
+        align-items: center;
+
+        margin-right: 4px;
+
+        position: relative;
+
+        z-index: 5;
+
+        animation:
+          dpPullBounce
+          0.65s
+          ease-in-out
+          infinite
+          alternate;
+      }
+
+
+      /* =========================================
+         BOY
+      ========================================= */
+
+      .dp-boy {
+        width: 48px;
+        height: 52px;
+
+        position: relative;
+
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      }
+
+      .dp-boy-head {
+        position: absolute;
+
+        top: -4px;
+        left: 5px;
+
+        font-size: 29px;
+
+        z-index: 3;
+
+        filter:
+          drop-shadow(
+            0 3px 4px rgba(0,0,0,0.16)
+          );
+
+        animation:
+          dpHeadMove
+          0.65s
+          ease-in-out
+          infinite
+          alternate;
+      }
+
+
+      /* Body */
+      .dp-boy-body {
+        position: absolute;
+
+        width: 19px;
+        height: 23px;
+
+        left: 14px;
+        top: 25px;
+
+        background:
+          linear-gradient(
+            135deg,
+            #1e293b,
+            #334155
+          );
+
+        border-radius:
+          8px 8px 5px 5px;
+
+        box-shadow:
+          0 3px 7px rgba(0,0,0,0.16);
+      }
+
+
+      /* Arms */
+      .dp-arm {
+        position: absolute;
+
+        width: 17px;
+        height: 5px;
+
+        background: #334155;
+
+        border-radius: 10px;
+
+        top: 5px;
+      }
+
+      .dp-arm-front {
+        right: -11px;
+
+        transform:
+          rotate(-17deg);
+
+        transform-origin: left center;
+
+        animation:
+          dpArmPull
+          0.55s
+          ease-in-out
+          infinite
+          alternate;
+      }
+
+      .dp-arm-back {
+        left: -8px;
+
+        transform:
+          rotate(25deg);
+      }
+
+
+      /* Legs */
+      .dp-leg {
+        position: absolute;
+
+        width: 6px;
+        height: 17px;
+
+        background: #1e293b;
+
+        border-radius: 5px;
+
+        top: 43px;
+
+        transform-origin: top center;
+      }
+
+      .dp-leg-left {
+        left: 15px;
+
+        animation:
+          dpWalkLeft
+          0.55s
+          ease-in-out
+          infinite
+          alternate;
+      }
+
+      .dp-leg-right {
+        left: 27px;
+
+        animation:
+          dpWalkRight
+          0.55s
+          ease-in-out
+          infinite
+          alternate;
+      }
+
+
+      /* =========================================
+         ROPE
+      ========================================= */
+
+      .dp-rope {
+        width: 54px;
+        height: 4px;
+
+        position: relative;
+
+        margin-left: -1px;
+
+        background:
+          linear-gradient(
+            90deg,
+            #475569,
+            #94a3b8
+          );
+
+        border-radius: 10px;
+
+        transform:
+          rotate(-4deg);
+
+        transform-origin: left center;
+
+        box-shadow:
+          0 1px 3px rgba(0,0,0,0.18);
+
+        animation:
+          dpRopePull
+          0.5s
+          ease-in-out
+          infinite
+          alternate;
+      }
+
+      .dp-rope span {
+        position: absolute;
+
+        width: 6px;
+        height: 6px;
+
+        border-radius: 50%;
+
+        background: #20A8D8;
+
+        top: -1px;
+
+        animation:
+          dpRopeDot
+          1s
+          linear
+          infinite;
+      }
+
+      .dp-rope span:nth-child(1) {
+        left: 8px;
+      }
+
+      .dp-rope span:nth-child(2) {
+        left: 26px;
+        animation-delay: .2s;
+      }
+
+      .dp-rope span:nth-child(3) {
+        left: 44px;
+        animation-delay: .4s;
+      }
+
+
+      /* =========================================
+         PREMIUM CARD
+      ========================================= */
+
+      .dp-premium-card {
+        height: 43px;
+
+        min-width: 620px;
+
+        position: relative;
+
+        display: flex;
+        align-items: center;
+
+        padding:
+          0 22px 0 14px;
+
+        gap: 11px;
+
+        overflow: hidden;
+
+        border-radius: 15px;
+
+        background:
+          linear-gradient(
+            135deg,
+            rgba(255,255,255,0.98),
+            rgba(243,250,255,0.97)
+          );
+
+        border:
+          1px solid rgba(32,168,216,0.28);
+
+        box-shadow:
+          0 8px 25px rgba(32,168,216,0.13),
+          inset 0 1px 0 rgba(255,255,255,0.95);
+
+        backdrop-filter: blur(10px);
+
+        transform:
+          translateY(-1px);
+      }
+
+
+      /* Left live dot */
+      .dp-live-dot {
+        width: 8px;
+        height: 8px;
+
+        flex-shrink: 0;
+
+        border-radius: 50%;
+
+        background: #20A8D8;
+
+        box-shadow:
+          0 0 0 4px rgba(32,168,216,0.12),
+          0 0 14px rgba(32,168,216,0.6);
+
+        animation:
+          dpLivePulse
+          1.2s
+          ease-in-out
+          infinite;
+      }
+
+
+      /* Rocket */
+      .dp-main-icon {
+        font-size: 19px;
+
+        filter:
+          drop-shadow(
+            0 3px 4px rgba(32,168,216,0.22)
+          );
+
+        animation:
+          dpRocket
+          1.7s
+          ease-in-out
+          infinite;
+      }
+
+
+      /* Content */
+      .dp-content {
+        display: flex;
+        flex-direction: column;
+
+        justify-content: center;
+
+        gap: 2px;
+      }
+
+
+      /* Heading */
+      .dp-heading {
+        display: flex;
+        align-items: center;
+
+        gap: 8px;
+
+        font-size: 14px;
+
+        font-weight: 900;
+
+        letter-spacing: 1px;
+
+        color: #172033;
+      }
+
+
+      /* LIVE Badge */
+      .dp-live-badge {
+        font-size: 8px;
+
+        padding:
+          2px 7px;
+
+        border-radius: 20px;
+
+        color: white;
+
+        background:
+          linear-gradient(
+            135deg,
+            #20A8D8,
+            #6366f1
+          );
+
+        box-shadow:
+          0 3px 8px rgba(32,168,216,0.25);
+
+        animation:
+          dpBadgePulse
+          1.5s
+          ease-in-out
+          infinite;
+      }
+
+
+      /* Rules */
+      .dp-rules {
+        display: flex;
+        align-items: center;
+
+        gap: 10px;
+
+        font-size: 10px;
+
+        font-weight: 700;
+      }
+
+      .dp-rule {
+        display: flex;
+        align-items: center;
+
+        gap: 5px;
+      }
+
+      .dp-rule strong {
+        font-weight: 900;
+      }
+
+      .testing {
+        color: #0891b2;
+      }
+
+      .production {
+        color: #e11d48;
+      }
+
+      .timing {
+        color: #475569;
+      }
+
+
+      /* Separators */
+      .dp-separator {
+        color: #b7c4d0;
+
+        font-size: 15px;
+
+        animation:
+          dpSeparatorGlow
+          2s
+          ease-in-out
+          infinite;
+      }
+
+
+      /* =========================================
+         CARD SHINE
+      ========================================= */
+
+      .dp-card-shine {
+        position: absolute;
+
+        top: 0;
+        left: -120px;
+
+        width: 80px;
+        height: 100%;
+
+        background:
+          linear-gradient(
+            90deg,
+            transparent,
+            rgba(255,255,255,0.8),
+            transparent
+          );
+
+        transform:
+          skewX(-20deg);
+
+        animation:
+          dpShine
+          3.5s
+          ease-in-out
+          infinite;
+      }
+
+
+      /* =========================================
+         FLOATING PARTICLES
+      ========================================= */
+
+      .dp-particle {
+        position: absolute;
+
+        font-size: 12px;
+
+        color: #20A8D8;
+
+        opacity: .5;
+
+        pointer-events: none;
+      }
+
+      .p1 {
+        margin-left: 30px;
+
+        animation:
+          dpParticle 2.5s
+          ease-in-out
+          infinite;
+      }
+
+      .p2 {
+        margin-left: 230px;
+
+        animation:
+          dpParticle 3s
+          ease-in-out
+          infinite
+          .4s;
+      }
+
+      .p3 {
+        margin-left: 500px;
+
+        animation:
+          dpParticle 2.7s
+          ease-in-out
+          infinite
+          .8s;
+      }
+
+      .p4 {
+        margin-left: 730px;
+
+        animation:
+          dpParticle 3.2s
+          ease-in-out
+          infinite
+          1s;
+      }
+
+
+      /* =========================================
+         ANIMATIONS
+      ========================================= */
+
+      @keyframes dpPremiumMove {
+
+        0% {
+          transform:
+            translateX(100vw);
+        }
+
+        100% {
+          transform:
+            translateX(-850px);
+        }
+
+      }
+
+
+      @keyframes dpPullBounce {
+
+        0% {
+          transform:
+            translateY(2px)
+            rotate(-1deg);
+        }
+
+        100% {
+          transform:
+            translateY(-3px)
+            rotate(1deg);
+        }
+
+      }
+
+
+      @keyframes dpHeadMove {
+
+        0% {
+          transform:
+            rotate(-3deg);
+        }
+
+        100% {
+          transform:
+            rotate(3deg);
+        }
+
+      }
+
+
+      @keyframes dpArmPull {
+
+        0% {
+          transform:
+            rotate(-12deg);
+        }
+
+        100% {
+          transform:
+            rotate(-25deg);
+        }
+
+      }
+
+
+      @keyframes dpWalkLeft {
+
+        0% {
+          transform:
+            rotate(18deg);
+        }
+
+        100% {
+          transform:
+            rotate(-18deg);
+        }
+
+      }
+
+
+      @keyframes dpWalkRight {
+
+        0% {
+          transform:
+            rotate(-18deg);
+        }
+
+        100% {
+          transform:
+            rotate(18deg);
+        }
+
+      }
+
+
+      @keyframes dpRopePull {
+
+        0% {
+          transform:
+            rotate(-7deg)
+            scaleX(.92);
+        }
+
+        100% {
+          transform:
+            rotate(4deg)
+            scaleX(1);
+        }
+
+      }
+
+
+      @keyframes dpRopeDot {
+
+        0% {
+          opacity: .2;
+          transform: scale(.6);
+        }
+
+        50% {
+          opacity: 1;
+          transform: scale(1.2);
+        }
+
+        100% {
+          opacity: .2;
+          transform: scale(.6);
+        }
+
+      }
+
+
+      @keyframes dpLivePulse {
+
+        0%,100% {
+          transform: scale(1);
+          box-shadow:
+            0 0 0 4px rgba(32,168,216,.12),
+            0 0 10px rgba(32,168,216,.45);
+        }
+
+        50% {
+          transform: scale(1.35);
+          box-shadow:
+            0 0 0 7px rgba(32,168,216,.06),
+            0 0 20px rgba(32,168,216,.7);
+        }
+
+      }
+
+
+      @keyframes dpRocket {
+
+        0%,100% {
+          transform:
+            translateY(0)
+            rotate(0deg);
+        }
+
+        50% {
+          transform:
+            translateY(-3px)
+            rotate(-4deg);
+        }
+
+      }
+
+
+      @keyframes dpBadgePulse {
+
+        0%,100% {
+          transform: scale(1);
+        }
+
+        50% {
+          transform: scale(1.08);
+        }
+
+      }
+
+
+      @keyframes dpSeparatorGlow {
+
+        0%,100% {
+          opacity: .4;
+        }
+
+        50% {
+          opacity: 1;
+        }
+
+      }
+
+
+      @keyframes dpShine {
+
+        0% {
+          left: -120px;
+        }
+
+        45%,100% {
+          left: 750px;
+        }
+
+      }
+
+
+      @keyframes dpParticle {
+
+        0%,100% {
+          transform:
+            translateY(6px)
+            scale(.7);
+
+          opacity: .15;
+        }
+
+        50% {
+          transform:
+            translateY(-8px)
+            scale(1.2);
+
+          opacity: .8;
+        }
+
+      }
+
+
+      @keyframes dpGlowMove {
+
+        0% {
+          transform:
+            translateX(-20px)
+            scale(.9);
+        }
+
+        100% {
+          transform:
+            translateX(40px)
+            scale(1.1);
+        }
+
+      }
+
+
+      /* =========================================
+         MOBILE
+      ========================================= */
+
+      @media (max-width: 700px) {
+
+        .dp-premium-notice {
+          height: 58px;
+        }
+
+        .dp-premium-card {
+          min-width: 540px;
+          height: 39px;
+
+          padding:
+            0 16px 0 11px;
+
+          gap: 8px;
+        }
+
+        .dp-boy {
+          transform: scale(.85);
+        }
+
+        .dp-rope {
+          width: 40px;
+        }
+
+        .dp-heading {
+          font-size: 16px;
+        }
+
+        .dp-rules {
+          font-size: 15px;
+          gap: 6px;
+        }
+
+        .dp-main-icon {
+          font-size: 16px;
+        }
+
+        .dp-live-dot {
+          width: 6px;
+          height: 6px;
+        }
+
+      }
+
+
+      /* =========================================
+         REDUCE MOTION ACCESSIBILITY
+      ========================================= */
+
+      @media (prefers-reduced-motion: reduce) {
+
+        .dp-premium-track,
+        .dp-boy-wrapper,
+        .dp-boy-head,
+        .dp-arm,
+        .dp-leg,
+        .dp-rope,
+        .dp-rope span,
+        .dp-live-dot,
+        .dp-main-icon,
+        .dp-live-badge,
+        .dp-separator,
+        .dp-card-shine,
+        .dp-particle,
+        .dp-glow {
+          animation: none !important;
+        }
+
+      }
+
+    `}
+          </style>
+
         </div>
 
         <div className="p-6">
