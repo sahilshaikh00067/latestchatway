@@ -2662,9 +2662,9 @@ def send_whatsapp(request):
 # hit /run-scheduled-campaigns/ every 1-2 minutes so scheduled sends fire
 # even if nobody is actively loading `my_campaigns` at that moment.
 #
-# ═════════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════
 # 📌 SUPABASE STORAGE SETUP (required for image/video upload to work)
-# ═════════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════
 # 1. Supabase dashboard → Storage → New bucket → name "campaign-media" → PUBLIC ✅
 # 2. Project Settings → API Keys → copy Project URL + service_role (secret) key
 # 3. Render → your backend service → Environment → add:
