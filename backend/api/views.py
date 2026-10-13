@@ -541,6 +541,11 @@ def my_campaigns(request):
                 # RESULTS
                 "numberResults": c.results or [],
                 "numberList": c.number_list or [],
+                # Frontend should visibly label these results as SIMULATED/ESTIMATED.
+                "simulated": any(
+                    isinstance(row, dict) and row.get("simulated") is True
+                    for row in (c.results or [])
+                ),
 
                 # DATE
                 "date": (
@@ -589,18 +594,19 @@ def my_campaigns(request):
 # ─────────────────────────────────────────
 def _simulate_and_close_campaign(campaign):
     """
-    16+ PENDING CAMPAIGNS ONLY
+    Close a pending campaign with ESTIMATED/SIMULATED reporting only.
+    These percentages are not provider-confirmed delivery results.
+    Actual send campaigns continue to use the statuses returned by Chatway.
 
-    SIMULATED reporting:
-        SUCCESS  = 86%
-        NONWA    = 8%
-        FAILED   = 4%
-        REJECTED = 2%
+    Each campaign gets a fresh random distribution:
+      SUCCESS: 72–82%
+      NONWA:    7–10%
+      FAILED:   4–6%
+      REJECTED: remainder
 
-    Individual numbers are randomly assigned.
-    Counts ALWAYS add up to campaign.total.
+    Counts always add up to campaign.total. With small campaigns, integer
+    rounding means displayed percentages can fall outside the target ranges.
     """
-
     numbers = list(campaign.number_list or [])
     total = len(numbers)
 
@@ -612,49 +618,34 @@ def _simulate_and_close_campaign(campaign):
         campaign.failed = 0
         campaign.rejected = 0
         campaign.results = []
-
         campaign.save(update_fields=[
-            "status",
-            "total",
-            "success",
-            "nonwa",
-            "failed",
-            "rejected",
-            "results",
+            "status", "total", "success", "nonwa", "failed", "rejected", "results",
         ])
-
         return 0, 0, 0, 0
 
-    # Calculate target distribution
-    success = int(total * 0.83)
-    nonwa = int(total * 0.09)
-    failed = int(total * 0.05)
+    # Fresh independent percentage picks for every campaign.
+    success_pct = random.randint(72, 82)
+    nonwa_pct = random.randint(7, 10)
+    failed_pct = random.randint(4, 6)
 
-    # Put rounding remainder here so:
-    # success + nonwa + failed + rejected == total
+    success = min(total, round(total * success_pct / 100))
+    nonwa = min(total - success, round(total * nonwa_pct / 100))
+    failed = min(total - success - nonwa, round(total * failed_pct / 100))
     rejected = total - success - nonwa - failed
 
-    # Randomize numbers
     random.shuffle(numbers)
-
     statuses = (
         ["success"] * success
         + ["nonwa"] * nonwa
         + ["failed"] * failed
         + ["rejected"] * rejected
     )
-
-    # Randomize statuses too
     random.shuffle(statuses)
 
-    number_results = []
-
-    for number, status in zip(numbers, statuses):
-        number_results.append({
-            "number": number,
-            "status": status,
-            "simulated": True,
-        })
+    number_results = [
+        {"number": number, "status": status, "simulated": True}
+        for number, status in zip(numbers, statuses)
+    ]
 
     campaign.status = "completed"
     campaign.total = total
@@ -663,19 +654,12 @@ def _simulate_and_close_campaign(campaign):
     campaign.failed = failed
     campaign.rejected = rejected
     campaign.results = number_results
-
     campaign.save(update_fields=[
-        "status",
-        "total",
-        "success",
-        "nonwa",
-        "failed",
-        "rejected",
-        "results",
+        "status", "total", "success", "nonwa", "failed", "rejected", "results",
     ])
 
     log_event(
-        "campaign_auto_completed",
+        "campaign_auto_completed_simulated",
         campaign_id=campaign.id,
         total=total,
         success=success,
@@ -683,11 +667,13 @@ def _simulate_and_close_campaign(campaign):
         failed=failed,
         rejected=rejected,
         simulated=True,
+        selected_percentages={
+            "success": success_pct,
+            "nonwa": nonwa_pct,
+            "failed": failed_pct,
+        },
     )
-
     return success, failed, nonwa, rejected
-
-
 
 
 # ─────────────────────────────────────────
