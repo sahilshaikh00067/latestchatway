@@ -31,10 +31,11 @@ USERNAME = "APIDEMO"
 # NOTE: move these to environment variables / Django settings in production
 # (e.g. os.environ["CHATWAY_TOKENS"].split(",")) instead of hardcoding secrets in code.
 TOKENS = [
-    "R2IxeEMrLzY3ZDRjTTFvNHg1VWl6dz09",
     "N1NyWkNkYlZMZ0lmV0M2QjU1Z1RrZz09",
+    "R2IxeEMrLzY3ZDRjTTFvNHg1VWl6dz09",
     "SnNmbFphVTJkUllFYVBmOWtkbjd1Zz09",
     "S05sMDdKcHR4bytqckJVZFBaQ0I3Zz09",
+
 
 ]
 TOKEN_COUNT = len(TOKENS)
@@ -2662,9 +2663,9 @@ def send_whatsapp(request):
 # hit /run-scheduled-campaigns/ every 1-2 minutes so scheduled sends fire
 # even if nobody is actively loading `my_campaigns` at that moment.
 #
-# ═══════════════════════════════════════════════════════════════
+# ═════════════════════════════════════════════════════════════════════════
 # 📌 SUPABASE STORAGE SETUP (required for image/video upload to work)
-# ═══════════════════════════════════════════════════════════════
+# ═════════════════════════════════════════════════════════════════════════
 # 1. Supabase dashboard → Storage → New bucket → name "campaign-media" → PUBLIC ✅
 # 2. Project Settings → API Keys → copy Project URL + service_role (secret) key
 # 3. Render → your backend service → Environment → add:
