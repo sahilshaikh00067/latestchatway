@@ -573,6 +573,13 @@ def my_campaigns(request):
                     if c.scheduled_at
                     else None
                 ),
+                
+                "completeAt": (
+                    timezone.localtime(c.complete_at).strftime("%d-%m-%Y %H:%M")
+                    if c.complete_at
+                    else None
+                ),
+                
             })
 
         return Response({
@@ -2066,7 +2073,7 @@ def send_whatsapp(request):
             # CHANGE 5 TO ANY OTHER NUMBER IF REQUIRED
             # ======================================================
 
-            delay_minutes = 10
+            delay_minutes = 15
 
 
             complete_at = (
@@ -2402,8 +2409,8 @@ def send_whatsapp(request):
         if len(numbers) > 15:
 
             delay_minutes = random.randint(
-                15,
-                25
+                25,
+                45
             )
 
 

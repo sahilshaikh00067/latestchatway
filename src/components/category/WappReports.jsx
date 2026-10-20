@@ -90,45 +90,45 @@ const WappReports = () => {
   // ==========================================
 
 
-const fetchCampaigns = async () => {
-  if (!currentUser) {
-    setAllEntries([]);
-    return;
-  }
-
-  const userId = currentUser.id ?? currentUser.user_id;
-
-  if (!userId) {
-    console.error("Report fetch failed: user ID missing", currentUser);
-    setAllEntries([]);
-    return;
-  }
-
-  setLoading(true);
-
-  try {
-    const res = await fetch(
-      `${BASE}/my-campaigns/?user_id=${encodeURIComponent(userId)}`
-    );
-
-    const data = await res.json();
-
-    if (!res.ok || data.status !== "success") {
-      throw new Error(
-        data.message || `Report API failed: HTTP ${res.status}`
-      );
+  const fetchCampaigns = async () => {
+    if (!currentUser) {
+      setAllEntries([]);
+      return;
     }
 
-    setAllEntries(
-      Array.isArray(data.campaigns) ? data.campaigns : []
-    );
-  } catch (err) {
-    console.error("Campaign Fetch Error:", err);
-    // Don't erase previously loaded reports on a temporary failure.
-  } finally {
-    setLoading(false);
-  }
-};
+    const userId = currentUser.id ?? currentUser.user_id;
+
+    if (!userId) {
+      console.error("Report fetch failed: user ID missing", currentUser);
+      setAllEntries([]);
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const res = await fetch(
+        `${BASE}/my-campaigns/?user_id=${encodeURIComponent(userId)}`
+      );
+
+      const data = await res.json();
+
+      if (!res.ok || data.status !== "success") {
+        throw new Error(
+          data.message || `Report API failed: HTTP ${res.status}`
+        );
+      }
+
+      setAllEntries(
+        Array.isArray(data.campaigns) ? data.campaigns : []
+      );
+    } catch (err) {
+      console.error("Campaign Fetch Error:", err);
+      // Don't erase previously loaded reports on a temporary failure.
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // ==========================================
   // PAGE LOAD
@@ -652,9 +652,13 @@ const fetchCampaigns = async () => {
 
                           </td>
 
-                          <td className="px-3 py-2 border-r border-gray-300">
-                            {e.date}
-                          </td>
+
+
+<td className="px-3 py-2 border-r border-gray-300">
+  {e.date}
+</td>
+
+
 
                           <td className="px-3 py-2">
 
