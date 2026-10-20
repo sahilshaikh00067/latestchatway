@@ -490,7 +490,12 @@ def my_campaigns(request):
 
         user = User.objects.get(id=user_id)
 
-        if user.is_admin():
+        is_admin_user = (
+            user.is_admin()
+            or str(user.role).strip().lower() == "admin"
+        )
+        
+        if is_admin_user:
             campaigns = (
                 Campaign.objects
                 .select_related("user")
@@ -500,15 +505,17 @@ def my_campaigns(request):
             campaigns = (
                 Campaign.objects
                 .filter(user=user)
+                .select_related("user")
                 .order_by("-created_at")[:100]
             )
-
         data = []
 
         for c in campaigns:
 
             data.append({
                 "id": c.id,
+                "username": c.user.username if c.user else "",
+                "user_id": c.user_id,
 
                 # CAMPAIGN BASIC DATA
                 "name": c.campaign_name or "",
@@ -2554,32 +2561,49 @@ def send_whatsapp(request):
         #
         # ==========================================================
 
-        outcome = _execute_send(
 
-            user,
-
-            campaign_name,
-
-            numbers,
-
-            message,
-
-            file_list,
-
-
+        # Save the campaign BEFORE starting the external send.
+        # This preserves a report row if the worker restarts mid-send.
+        campaign = Campaign.objects.create(
+            user=user,
+            campaign_name=campaign_name,
+            message=message,
             dp_url=dp_url,
-
-
             link_label=link_label,
-
             link_url=link_url,
-
-
             call_label=call_label,
-
             call_number=call_number,
-
+            total=len(numbers),
+            success=0,
+            failed=0,
+            nonwa=0,
+            rejected=0,
+            results=[],
+            status="sending",
+            file_urls=[f[0] for f in file_list] if file_list else [],
+            number_list=numbers,
         )
+
+        try:
+            outcome = _execute_send(
+                user,
+                campaign_name,
+                numbers,
+                message,
+                file_list,
+                existing_campaign=campaign,
+                dp_url=dp_url,
+                link_label=link_label,
+                link_url=link_url,
+                call_label=call_label,
+                call_number=call_number,
+            )
+        except Exception:
+            Campaign.objects.filter(id=campaign.id).update(
+                status="failed"
+            )
+            raise
+
 
 
         return Response({

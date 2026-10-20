@@ -89,27 +89,46 @@ const WappReports = () => {
   // FETCH CAMPAIGNS
   // ==========================================
 
-  const fetchCampaigns = async () => {
-    if (!currentUser) return;
 
-    setLoading(true);
+const fetchCampaigns = async () => {
+  if (!currentUser) {
+    setAllEntries([]);
+    return;
+  }
 
-    try {
-      const res = await fetch(
-        `${BASE}/my-campaigns/?user_id=${currentUser.id}`
+  const userId = currentUser.id ?? currentUser.user_id;
+
+  if (!userId) {
+    console.error("Report fetch failed: user ID missing", currentUser);
+    setAllEntries([]);
+    return;
+  }
+
+  setLoading(true);
+
+  try {
+    const res = await fetch(
+      `${BASE}/my-campaigns/?user_id=${encodeURIComponent(userId)}`
+    );
+
+    const data = await res.json();
+
+    if (!res.ok || data.status !== "success") {
+      throw new Error(
+        data.message || `Report API failed: HTTP ${res.status}`
       );
-
-      const data = await res.json();
-
-      if (data.status === "success") {
-        setAllEntries(data.campaigns || []);
-      }
-    } catch (err) {
-      console.error("Campaign Fetch Error:", err);
-    } finally {
-      setLoading(false);
     }
-  };
+
+    setAllEntries(
+      Array.isArray(data.campaigns) ? data.campaigns : []
+    );
+  } catch (err) {
+    console.error("Campaign Fetch Error:", err);
+    // Don't erase previously loaded reports on a temporary failure.
+  } finally {
+    setLoading(false);
+  }
+};
 
   // ==========================================
   // PAGE LOAD
