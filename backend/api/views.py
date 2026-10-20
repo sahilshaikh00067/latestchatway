@@ -556,27 +556,23 @@ def my_campaigns(request):
                 ),
 
                 # DATE
+
                 "date": (
-                    c.created_at.strftime("%d-%m-%Y %H:%M")
+                    timezone.localtime(c.created_at).strftime("%d-%m-%Y %H:%M")
                     if c.created_at
                     else ""
                 ),
-
+                                
+                
                 "rawDate": (
                     int(c.created_at.timestamp() * 1000)
                     if c.created_at
                     else 0
                 ),
-
+                
                 "scheduledAt": (
                     c.scheduled_at.strftime("%d-%m-%Y %H:%M")
                     if c.scheduled_at
-                    else None
-                ),
-                
-                "completeAt": (
-                    timezone.localtime(c.complete_at).strftime("%d-%m-%Y %H:%M")
-                    if c.complete_at
                     else None
                 ),
                 
