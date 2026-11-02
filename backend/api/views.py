@@ -506,7 +506,7 @@ def my_campaigns(request):
                 Campaign.objects
                 .filter(user=user)
                 .select_related("user")
-                .order_by("-created_at")[:100]
+                .order_by("-created_at")[:70]
             )
         data = []
 
