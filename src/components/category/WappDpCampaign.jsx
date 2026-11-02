@@ -315,7 +315,7 @@ export default function WappDpCampaign() {
     // 1–10 = Testing allowed
     // 11–4999 = Not allowed
     // 5000+ = Allowed
-    if (validCount > 10 && validCount < 5000) {
+    if (validCount > 100 && validCount < 5000) {
       showToast(
         `DP Campaign requires minimum 5,000 numbers. Current: ${validCount}`,
         "error"
